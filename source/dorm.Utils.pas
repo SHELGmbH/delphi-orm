@@ -42,6 +42,8 @@ type
     class procedure DatasetToObject(Dataset: TDataset; Obj: TObject);
     class function GetProperty(Obj: TObject;
       const PropertyName: string): TValue;
+    class function GetPropertyDef(Obj: TObject;
+      const PropertyName: string; _RequiresRW : boolean = False): TRttiProperty; overload;
     class function GetField(Obj: TObject; const PropertyName: string)
       : TValue; overload;
     class function GetField(Obj: TObject; const MappingCache: TMappingCache)
@@ -294,6 +296,29 @@ begin
     Result := 'blob'
   else
     Result := EmptyStr;
+end;
+
+class function TdormUtils.GetPropertyDef(Obj: TObject;
+      const PropertyName: string; _RequiresRW : boolean = False): TRttiProperty;
+var
+  Prop: TRttiProperty;
+  ARttiType: TRttiType;
+begin
+  Result := nil;
+  ARttiType := ctx.GetType(Obj.ClassType);
+  if Assigned(ARttiType) then begin
+    Prop := ARttiType.GetProperty(PropertyName);
+    if Assigned(Prop) then begin
+      if _RequiresRW then begin
+        if Prop.IsReadable and prop.IsWritable then begin
+          Result := Prop;
+        end;
+      end else begin
+        Result := Prop;
+      end;
+    end;
+  end;
+
 end;
 
 class procedure TdormUtils.ObjectToDataSet(Obj: TObject; Field: TField;

@@ -85,7 +85,7 @@ type
       AMappingField: TMappingField; const Value: TValue; AObject: TObject)
       : boolean; overload;
     function Load(ATypeInfo: PTypeInfo; const Value: TValue; AObject: TObject): boolean; overload;
-
+    procedure ApplyBackupObject(_Obj : TObject);
   strict protected
     CurrentObjectStatus: TdormObjectStatus;
     FValidatingDuck: TDuckTypedObject;
@@ -271,6 +271,11 @@ type
 
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
       overload;
+    function LoadListSQL<T: class>(const _WhereClause : string; _WithNoLock : boolean = false):
+
+{$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
+      overload;
+
     // COMMANDERS
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     // utilities
@@ -337,6 +342,17 @@ var
 begin
   for Obj in ACollection do
     AddAsLoadedObject(Obj, AMappingField);
+end;
+
+procedure TSession.ApplyBackupObject(_Obj: TObject);
+var prop : TRttiProperty;
+begin
+  if assigned(_Obj) then begin
+    prop := TdormUtils.GetPropertyDef(_Obj, 'Backup', True);
+    if assigned(prop) then begin
+      TdormUtils.SetProperty(_Obj, 'Backup', TdormUtils.Clone(_obj));
+    end;
+  end;
 end;
 
 procedure TSession.BuildDatabase;
@@ -964,6 +980,7 @@ begin
     begin
       _validable := WrapAsValidateableObject(Obj, FValidatingDuck);
       _validable.OnAfterLoad;
+      ApplyBackupObject(Obj);
     end;
   end;
   LoadExit;
@@ -1021,6 +1038,7 @@ begin
     LoadHasManyRelation(_table, _idValue, rt, AObject);
     LoadHasOneRelation(_table, _idValue, rt, AObject);
     _validateable.OnAfterLoad;
+    ApplyBackupObject(AObject);
   end;
 
   GetLogger.ExitLevel('Load ' + rt.ToString);
@@ -1221,12 +1239,20 @@ begin
     raise Exception.Create('Unknown property name ' + APropertyName);
 end;
 
-function TSession.LoadListSQL<T>(ASQLable: ISQLable):
-
+function TSession.LoadListSQL<T>(const _WhereClause : string; _WithNoLock : boolean = false):
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
+var
+  Table: TMappingTable;
+  rt: TRttiType;
+  CustomCrit: ICustomCriteria;
+  ItemTypeInfo: PTypeInfo;
 begin
-  Result := {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND}.Create(true);
-  FillListSQL<T>(Result, ASQLable);
+  ItemTypeInfo := T.ClassInfo;
+  rt := FCTX.GetType(ItemTypeInfo);
+  Table := FMappingStrategy.GetMapping(rt);
+  CustomCrit := TSQLCustomCriteria.Create('select * from ' + Table.TableName +
+    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur für MSSQL!
+  Result := LoadList<T>(CustomCrit);
 end;
 
 procedure TSession.LoadList(AClassType: TClass; Criteria: ICriteria; AObject: TObject);
@@ -1289,6 +1315,13 @@ function TSession.LoadList<T>(Criteria: ICriteria):
 begin
   Result := {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND}.Create(true);
   LoadList<T>(Criteria, Result);
+end;
+
+function TSession.LoadListSQL<T>(ASQLable: ISQLable):
+{$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
+begin
+  Result := {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND}.Create(true);
+  FillListSQL<T>(Result, ASQLable);
 end;
 
 procedure TSession.LoadList<T>(Criteria: ICriteria; AObject: TObject);
@@ -1592,6 +1625,7 @@ begin
     LoadHasManyRelation(_table, _idValue, rt, AObject);
     LoadHasOneRelation(_table, _idValue, rt, AObject);
     _validateable.OnAfterLoad;
+    ApplyBackupObject(AObject);
   end;
   GetLogger.ExitLevel('Load ' + rt.ToString);
   LoadExit;
@@ -1760,6 +1794,7 @@ begin
     SetObjectStatus(Obj, AStatus, ARaiseExceptionIfNotExists);
     _validateable := WrapAsValidateableObject(Obj, FValidatingDuck);
     _validateable.OnAfterLoad;
+    ApplyBackupObject(Obj);
   end;
 end;
 
@@ -2336,6 +2371,7 @@ begin
       SetObjectStatus(Obj, osClean, false);
       _validateable := WrapAsValidateableObject(Obj, FValidatingDuck);
       _validateable.OnAfterLoad;
+      ApplyBackupObject(Obj);
       Result := Obj;
     end
     else
