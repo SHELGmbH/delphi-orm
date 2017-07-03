@@ -71,9 +71,7 @@ implementation
 uses
   SysUtils,
   Classes,
-  TypInfo,
-  dorm.Commons,
-  dorm.Collections;
+  TypInfo;
 
 class function TdormUtils.MethodCall(AObject: TObject; AMethodName: string;
   AParameters: array of TValue): TValue;
@@ -84,7 +82,7 @@ begin
   if Assigned(m) then
     Result := m.Invoke(AObject, AParameters)
   else
-    raise EdormException.CreateFmt('Cannot find method "%s" in the object',
+    raise Exception.CreateFmt('Cannot find method "%s" in the object',
       [AMethodName]);
 end;
 
@@ -454,7 +452,7 @@ begin
   if Assigned(metaClass) then
     Result := Method.Invoke(metaClass, []).AsObject
   else
-    raise EdormException.Create('Cannot find a propert constructor for ' +
+    raise Exception.Create('Cannot find a propert constructor for ' +
       ARttiType.ToString);
 
   { Second solution, dirty and fast }

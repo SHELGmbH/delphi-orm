@@ -189,6 +189,7 @@ var
   fm: TMappingField;
   d: TDate;
   dt: TDateTime;
+  fmtsettings : TFormatSettings;
 begin
   fm := AMappingTable.FindByName(ACriteriaItem.GetAttribute);
   if not Assigned(fm) then
@@ -229,9 +230,11 @@ begin
       SQL := SQL + inttostr(ACriteriaItem.GetValue.AsInteger)
     else if fm.FieldType = 'boolean' then
       SQL := SQL + GetBooleanValueAsString(ACriteriaItem.GetValue.AsBoolean)
-    else if fm.FieldType = 'float' then
-      SQL := SQL + FloatToStr(ACriteriaItem.GetValue.AsExtended)
-    else if fm.FieldType = 'date' then
+    else if fm.FieldType = 'float' then begin
+      fmtsettings := TFormatSettings.Create(SysLocale.DefaultLCID);
+      fmtsettings.DecimalSeparator := '.';
+      SQL := SQL + FloatToStr(ACriteriaItem.GetValue.AsExtended, fmtsettings);
+    end else if fm.FieldType = 'date' then
     begin
       d := ACriteriaItem.GetValue.AsExtended;
       SQL := SQL + '''' + EscapeDate(d) + ''''
