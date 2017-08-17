@@ -72,6 +72,7 @@ type
     FOnAfterPersistObject: TdormSessionPersistEvent;
     FOnBeforePersistObject: TdormSessionPersistEvent;
     FOnBeforeConfigureStrategy: TdormStrategyConfigEvent;
+    class var FDontRaiseExceptionOnUnexpectedMultiRowResult: boolean;
     procedure LoadEnter;
     procedure LoadExit;
     function GetIdValue(AIdMappingField: TMappingField;
@@ -86,6 +87,8 @@ type
       : boolean; overload;
     function Load(ATypeInfo: PTypeInfo; const Value: TValue; AObject: TObject): boolean; overload;
     procedure ApplyBackupObject(_Obj : TObject);
+    class procedure SetDontRaiseExceptionOnUnexpectedMultiRowResult(
+      const Value: boolean); static;
   strict protected
     CurrentObjectStatus: TdormObjectStatus;
     FValidatingDuck: TDuckTypedObject;
@@ -317,6 +320,7 @@ type
     // strategy events
     property OnBeforeConfigureStrategy: TdormStrategyConfigEvent
       read FOnBeforeConfigureStrategy write FOnBeforeConfigureStrategy;
+    class property DontRaiseExceptionOnUnexpectedMultiRowResult : boolean read FDontRaiseExceptionOnUnexpectedMultiRowResult write SetDontRaiseExceptionOnUnexpectedMultiRowResult;
   end;
 
 implementation
@@ -402,7 +406,6 @@ var
   _MappingText: string;
   _MappingStrategy: IMappingStrategy;
   _JSonConfigEnv: ISuperObject;
-  s: ISuperObject;
 begin
   try
     _ConfigText := APersistenceConfiguration.ReadToEnd;
@@ -739,16 +742,11 @@ procedure TSession.FillList(APTypeInfo: PTypeInfo; ACollection: TObject; ACriter
 var
   rt: TRttiType;
   _table: TMappingTable;
-  _fields: TMappingFieldList;
-  // _type_info: PTypeInfo;
   SearcherClassname: string;
   List: IWrappedList;
-  Obj: TObject;
-  _validateable: TdormValidateable;
 begin
   rt := FCTX.GetType(APTypeInfo);
   _table := FMappingStrategy.GetMapping(rt);
-  _fields := _table.Fields;
   if assigned(ACriteria) then
     SearcherClassname := TObject(ACriteria).ClassName
   else
@@ -1052,9 +1050,9 @@ begin
   List := TObjectList<TObject>.Create(true);
   try
     LoadList(AClassType, Criteria, List);
-    if List.Count > 1 then
+    if (List.Count > 1) and not DontRaiseExceptionOnUnexpectedMultiRowResult then
       raise EdormException.Create('Singleton query returned more than 1 row');
-    Result := List.Count = 1;
+    Result := List.Count >= 1;
 
     if Result then
       AObject := List.Extract(List.First)
@@ -1260,12 +1258,9 @@ var
   SQL: string;
   Table: TMappingTable;
   rt: TRttiType;
-  _fields: TMappingFieldList;
   SearcherClassname: string;
   List: IWrappedList;
-  Obj: TObject;
   CustomCrit: ICustomCriteria;
-  _validateable: TdormValidateable;
   ItemTypeInfo: PTypeInfo;
 begin
   ItemTypeInfo := AClassType.ClassInfo;
@@ -1304,7 +1299,6 @@ begin
     Result := List;
   except
     List.Free;
-    Result := nil;
     raise;
   end;
 end;
@@ -1838,6 +1832,12 @@ begin
   end;
 end;
 
+class procedure TSession.SetDontRaiseExceptionOnUnexpectedMultiRowResult(
+  const Value: boolean);
+begin
+  FDontRaiseExceptionOnUnexpectedMultiRowResult := Value;
+end;
+
 procedure TSession.InsertCollection(ACollection: TObject);
 var
   Obj: TObject;
@@ -2141,17 +2141,12 @@ procedure TSession.FillListSQL(APTypeInfo: PTypeInfo; ACollection: TObject;
 var
   rt: TRttiType;
   _table: TMappingTable;
-  _fields: TMappingFieldList;
   _type_info: PTypeInfo;
-  SearcherClassname: string;
   List: IWrappedList;
-  Obj: TObject;
-  _validateable: TdormValidateable;
 begin
   _type_info := APTypeInfo;
   rt := FCTX.GetType(_type_info);
   _table := FMappingStrategy.GetMapping(rt);
-  _fields := _table.Fields;
   GetLogger.EnterLevel('FillListSQL');
   TdormUtils.MethodCall(ACollection, 'Clear', []);
   GetStrategy.LoadList(ACollection, rt, _table, ASQLable.ToSQL(self.GetMapping,
@@ -2319,9 +2314,9 @@ begin
   Result := nil;
   Coll := LoadList<T>(ACriteria);
   try
-    if Coll.Count > 1 then
+    if (Coll.Count > 1) and not DontRaiseExceptionOnUnexpectedMultiRowResult then
       raise EdormException.Create('Not expected multiple result rows ');
-    if Coll.Count = 1 then
+    if Coll.Count >= 1 then
       Result := Coll.Extract(Coll[0]);
   finally
     Coll.Free;
@@ -2346,10 +2341,7 @@ function TSession.Load(APTypeInfo: PTypeInfo; ASQLable: ISQLable): TObject;
 var
   rt: TRttiType;
   _table: TMappingTable;
-  _fields: TMappingFieldList;
   _type_info: PTypeInfo;
-  SearcherClassname: string;
-  List: IWrappedList;
   _validateable: TdormValidateable;
   ACollection: TObjectList<TObject>;
   Obj: TObject;
@@ -2357,15 +2349,14 @@ begin
   _type_info := APTypeInfo;
   rt := FCTX.GetType(_type_info);
   _table := FMappingStrategy.GetMapping(rt);
-  _fields := _table.Fields;
   GetLogger.EnterLevel('Load(SQL)');
   ACollection := TObjectList<TObject>.Create(false);
   try
     GetStrategy.LoadList(ACollection, rt, _table,
       ASQLable.ToSQL(self.GetMapping, self.GetStrategy));
-    if ACollection.Count > 1 then
+    if (ACollection.Count > 1) and not DontRaiseExceptionOnUnexpectedMultiRowResult then
       raise EdormException.Create('Singleton query returned more than 1 row');
-    if ACollection.Count = 1 then
+    if ACollection.Count >= 1 then
     begin
       Obj := ACollection[0];
       SetObjectStatus(Obj, osClean, false);
