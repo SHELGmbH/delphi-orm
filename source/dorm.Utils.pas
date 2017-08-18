@@ -369,7 +369,7 @@ var
   sourceObject: TObject;
   targetObject: TObject;
 begin
-  if not Assigned(TargetObj) then
+  if not assigned(SourceObj) or not Assigned(TargetObj) then
     Exit;
 
   _ARttiType := ctx.GetType(SourceObj.ClassType);
