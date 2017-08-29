@@ -1109,6 +1109,7 @@ var
   AttributeNameInTheParentObject: string;
   Coll: TObject;
   Criteria: ICriteria;
+  List : IWrappedList;
 begin
   GetLogger.Debug('Loading HAS_MANY for ' + AClassName + '.' + APropertyName);
   Table := FMappingStrategy.GetMapping(ARttiType);
@@ -1133,8 +1134,9 @@ begin
       ChildTable := FMappingStrategy.GetMapping(_child_type);
       GetStrategy.LoadList(Coll, _child_type, ChildTable, Criteria);
       { todo: callafterloadevent }
-      AddAsLoadedObject(WrapAsList(Coll), ChildTable.Id);
-      SetObjectsStatus(Coll, osClean, false);
+      List := WrapAsList(Coll);
+      AddAsLoadedObject(list, ChildTable.Id);
+      SetObjectsStatus(list, osClean, false);
       LoadRelationsForEachElement(Coll);
     end
     else
