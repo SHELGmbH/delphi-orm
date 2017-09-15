@@ -51,7 +51,7 @@ type
     function GetLogger: IdormLogger;
     procedure SetFireDACParameterValue(AFieldType: string; AStatement: TFDQuery; ParameterIndex: Integer;
       AValue: TValue; AIsNullable: boolean = False);
-    function EscapeDateTime(const Value: TDate): string; override;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string; override;
   public
     // Start Method Interface IdormPersistStrategy
     function GetLastInsertOID: TValue;
@@ -88,7 +88,7 @@ type
 implementation
 
 uses
-  dorm.Utils, System.Types;
+  dorm.Utils, System.Types, System.StrUtils;
 
 procedure TFireDACBaseAdapter.InitFormatSettings;
 begin
@@ -251,9 +251,9 @@ begin
   inherited;
 end;
 
-function TFireDACBaseAdapter.EscapeDateTime(const Value: TDate): string;
+function TFireDACBaseAdapter.EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string;
 begin
-  Result := FormatDateTime('YYYY-MM-DD&HH:NN:SS', Value);
+  Result := FormatDateTime('YYYY-MM-DD&HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
   Result := StringReplace(Result, '&', 'T', [rfReplaceAll]);
 end;
 
@@ -262,7 +262,6 @@ var
   Qry: TFDQuery;
 begin
   GetLogger.EnterLevel('ExecuteAndGetFirst');
-  Result := 0;
   GetLogger.Info('PREPARING: ' + SQL);
   Qry := FD.NewQuery;
   try
@@ -328,8 +327,6 @@ begin
   begin
     // manage transients fields
     isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-    // manage nullable fields
-    isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
 
     if (not field.IsPK or field.IsFK) and (not isTransient) then
     begin
@@ -421,15 +418,12 @@ var
   v: TValue;
   field: TMappingField;
   isTransient: boolean;
-  isNullable: boolean;
 begin
   Result := '';
   for field in AMappingTable.Fields do
   begin
     // manage transients fields
     isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-    // manage nullable fields
-    isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
 
     if (not field.IsPK) and (not isTransient) then
     begin
@@ -444,7 +438,6 @@ function TFireDACBaseAdapter.GetSqlFieldValues(AMappingTable: TMappingTable; AOb
 var
   field: TMappingField;
   isTransient: boolean;
-  isNullable: boolean;
   v: TValue;
 begin
   Result := '';
@@ -452,8 +445,6 @@ begin
   begin
     // manage transients fields
     isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-    // manage nullable fields
-    isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
 
     if (not field.IsPK) and (not isTransient) then
     begin
@@ -468,7 +459,6 @@ function TFireDACBaseAdapter.GetSqlFieldsForUpdate(AMappingTable: TMappingTable;
 var
   field: TMappingField;
   isTransient: boolean;
-  isNullable: boolean;
   v: TValue;
 begin
   Result := '';
@@ -476,8 +466,6 @@ begin
   begin
     // manage transients fields
     isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-    // manage nullable fields
-    isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
 
     if (not field.IsPK) and (not isTransient) then
     begin
@@ -855,7 +843,7 @@ begin
     begin
       AStatement.Params[ParameterIndex].DataType := ftDateTime;
       AStatement.Params[ParameterIndex].AsDateTime := AValue.AsExtended;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDate(AValue.AsExtended));
+      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDateTime(AValue.AsExtended, true));
     end;
   end
   else if CompareText(AFieldType, 'time') = 0 then

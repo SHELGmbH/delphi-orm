@@ -18,8 +18,8 @@ type
     // AMappingTable: TMappingTable): TMappingField;
     function EscapeString(const Value: string): string; virtual;
     function EscapeDate(const Value: TDate): string; virtual;
-    function EscapeDateTime(const Value: TDate): string; virtual;
-    function EscapeTime(const Value: TTime): string; virtual;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string; virtual;
+    function EscapeTime(const Value: TTime; AWithMillisSeconds : boolean = false): string; virtual;
     //
     function GetBooleanValueAsString(Value: Boolean): string; virtual;
 
@@ -44,7 +44,7 @@ implementation
 
 uses
   SysUtils,
-  System.DateUtils;
+  System.DateUtils, System.StrUtils;
 
 { TBaseAdapter }
 
@@ -260,9 +260,9 @@ begin
   Result := FormatDateTime('YYYY-MM-DD', Value);
 end;
 
-function TBaseAdapter.EscapeDateTime(const Value: TDate): string;
+function TBaseAdapter.EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string;
 begin
-  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS', Value);
+  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
 end;
 
 function TBaseAdapter.EscapeString(const Value: string): string;
@@ -270,9 +270,9 @@ begin
   Result := StringReplace(Value, '''', '''''', [rfReplaceAll]);
 end;
 
-function TBaseAdapter.EscapeTime(const Value: TTime): string;
+function TBaseAdapter.EscapeTime(const Value: TTime; AWithMillisSeconds : boolean = false): string;
 begin
-  Result := FormatDateTime('HH:NN:SS', Value);
+  Result := FormatDateTime('HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
 end;
 
 end.

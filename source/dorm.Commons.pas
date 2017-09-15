@@ -130,7 +130,7 @@ type
     function ExecuteAndGetFirst(SQL: string): Int64;
     function EscapeString(const Value: string): string;
     function EscapeDate(const Value: TDate): string;
-    function EscapeDateTime(const Value: TDate): string;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string;
     function GetSelectSQL(ACriteria: ICriteria; AMappingTable: TMappingTable): string;
     function GetCountSQL(ACriteria: ICriteria; AMappingTable: TMappingTable): string;
     function GetDatabaseBuilder(AEntities: TList<string>; AMappings: ICacheMappingStrategy)

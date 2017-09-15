@@ -68,7 +68,7 @@ type
       const Value: TValue): TValue;
     function EscapeString(const Value: string): string;
     function EscapeDate(const Value: TDate): string;
-    function EscapeDateTime(const Value: TDate): string;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string;
     function GetLastInsertOID: TValue;
     function GetKeysGenerator: IdormKeysGenerator;
     function Insert(ARttiType: TRttiType; AObject: TObject; ATableName: string;
@@ -293,9 +293,9 @@ begin
 end;
 
 function TFirebirdPersistStrategy.EscapeDateTime
-  (const Value: TDate): string;
+  (const Value: TDate; AWithMillisSeconds : boolean = false): string;
 begin
-  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS', Value);
+  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
 end;
 
 function TFirebirdPersistStrategy.EscapeString

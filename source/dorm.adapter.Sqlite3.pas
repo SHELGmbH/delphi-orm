@@ -62,7 +62,7 @@ type
       : TValue; overload;
     function EscapeString(const Value: String): String;
     function EscapeDate(const Value: TDate): String;
-    function EscapeDateTime(const Value: TDate): String;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String;
     function GetLastInsertOID: TValue;
     function GetKeysGenerator: IdormKeysGenerator;
     function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;
@@ -103,7 +103,7 @@ type
 implementation
 
 uses
-  dorm.Utils;
+  dorm.Utils, System.StrUtils;
 
 function TSqlite3PersistStrategy.Update(ARttiType: TRttiType; AObject: TObject;
   AMappingTable: TMappingTable; ACurrentVersion: Int64): Int64;
@@ -244,9 +244,9 @@ begin
   Result := FormatDateTime('YYYY-MM-DD', Value);
 end;
 
-function TSqlite3PersistStrategy.EscapeDateTime(const Value: TDate): String;
+function TSqlite3PersistStrategy.EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String;
 begin
-  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS', Value);
+  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
 end;
 
 function TSqlite3PersistStrategy.EscapeString(const Value: String): String;
