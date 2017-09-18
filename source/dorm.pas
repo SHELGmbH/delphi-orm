@@ -972,13 +972,10 @@ begin
       LoadBelongsToRelation(_table, Value, rt, Result);
       LoadHasManyRelation(_table, Value, rt, Result);
       LoadHasOneRelation(_table, Value, rt, Result);
-    end;
 
-    if assigned(Obj) then
-    begin
-      _validable := WrapAsValidateableObject(Obj, FValidatingDuck);
+      _validable := WrapAsValidateableObject(Result, FValidatingDuck);
       _validable.OnAfterLoad;
-      ApplyBackupObject(Obj);
+      ApplyBackupObject(Result);
     end;
   end;
   LoadExit;
