@@ -248,7 +248,7 @@ begin
       raise EdormException.CreateFmt('Unknown type %s in criteria',
         [fm.FieldType]);
   end else if ACriteriaItem.GetCompareOperator = coIN then begin
-    SQL := SQL + EscapeString(ACriteriaItem.GetValue.AsString);
+    SQL := SQL + ACriteriaItem.GetValue.AsString;
     SQL := SQL + ')';
   end;
 
