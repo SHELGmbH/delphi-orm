@@ -75,8 +75,6 @@ type
     class var FDontRaiseExceptionOnUnexpectedMultiRowResult: boolean;
     procedure LoadEnter;
     procedure LoadExit;
-    function GetIdValue(AIdMappingField: TMappingField;
-      AObject: TObject): TValue;
     procedure ReadIDConfig(const AJsonPersistenceConfig: ISuperObject);
     /// this method load an object using a value and a specific mapping field. is used to load the
     // relations between objects
@@ -86,7 +84,6 @@ type
       AMappingField: TMappingField; const Value: TValue; AObject: TObject)
       : boolean; overload;
     function Load(ATypeInfo: PTypeInfo; const Value: TValue; AObject: TObject): boolean; overload;
-    procedure ApplyBackupObject(_Obj : TObject);
     class procedure SetDontRaiseExceptionOnUnexpectedMultiRowResult(
       const Value: boolean); static;
   strict protected
@@ -98,6 +95,9 @@ type
   protected
     FCTX: TRttiContext;
     FMappingStrategy: ICacheMappingStrategy;
+    function GetIdValue(AIdMappingField: TMappingField;
+      AObject: TObject): TValue;
+    procedure ApplyBackupObject(_Obj : TObject);
     // events
     procedure DoSessionOnBeforePersistObject(AObject: TObject);
     procedure DoSessionOnAfterPersistObject(AObject: TObject);
@@ -166,7 +166,7 @@ type
     procedure InternalDelete(AObject: TObject;
       AValidaetable: TdormValidateable);
     procedure CheckChangedRows(const HowManyChangedRows: Integer);
-
+    procedure ObjectSaved(ASaveMode : TDormSaveMode; AObject : TObject; _table: TMappingTable; _Type: TRttiType); virtual;
   public
     constructor Create(Environment: TdormEnvironment); overload; virtual;
     destructor Destroy; override;
@@ -1343,6 +1343,12 @@ begin
     LoadRelations(el, ARelationsSet, AConsiderLazyLoading);
 end;
 
+procedure TSession.ObjectSaved(ASaveMode: TDormSaveMode; AObject: TObject;
+  _table: TMappingTable; _Type: TRttiType);
+begin
+  //
+end;
+
 function TSession.OIDIsSet(AObject: TObject): boolean;
 var
   _table: TMappingTable;
@@ -1961,6 +1967,7 @@ begin
       ClearOID(AObject);
       SetObjectStatus(AObject, osDirty, false);
       _validateable.OnAfterDelete;
+      ObjectSaved(os_Delete, AObject, _table, _rttitype);
     except
       on E: Exception do
       begin
@@ -2016,6 +2023,7 @@ begin
           ('Cannot insert [%s] because OI is not null', [AObject.ClassName]);
       SetObjectStatus(AObject, osClean, false);
       _validateable.OnAfterInsert;
+      ObjectSaved(os_Insert, AObject, _table, _Type);
     finally
       _validateable.Free;
     end;
@@ -2074,6 +2082,7 @@ begin
           ('Cannot update object without an ID [%s]', [_class_name]);
       SetObjectStatus(AObject, osClean, false);
       AValidaetable.OnAfterUpdate;
+      ObjectSaved(os_Update, AObject, _table, _Type);
     except
       on E: Exception do
       begin

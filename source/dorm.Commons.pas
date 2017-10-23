@@ -33,6 +33,7 @@ uses
   dorm.ObjectStatus, System.Types;
 
 type
+  TDormSaveMode = (os_Insert, os_Update, os_Delete);
   TDuckTypedList = class;
 
   EdormException = class(Exception)

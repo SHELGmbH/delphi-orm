@@ -355,6 +355,7 @@ begin
   begin
     ATable.Package := attribute.Package;
     ATable.TableName := attribute.TableName;
+    ATable.SaveHistory := attribute.SaveHistory;
   end;
 end;
 
@@ -719,6 +720,7 @@ begin
 
     if AOutput.Package = EmptyStr then
       AOutput.Package := tableToMerge.Package;
+    AOutput.SaveHistory := tableToMerge.SaveHistory or AOutput.SaveHistory;
 
     for fieldToMerge in tableToMerge.Fields do
     begin

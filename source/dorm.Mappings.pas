@@ -18,11 +18,13 @@ type
   private
     FTableName: string;
     FPackage: string;
+    FSaveHistory: boolean;
 
   public
-    constructor Create(const ATableName: string = ''; const APackageName: string = '');
+    constructor Create(const ATableName: string = ''; const APackageName: string = ''; ASaveHistory : boolean = false);
     property TableName: string read FTableName;
     property package: string read FPackage;
+    property SaveHistory : boolean read FSaveHistory;
   end;
 
   Column = class(TCustomAttribute)
@@ -208,7 +210,9 @@ type
     FBelongsToList: TMappingBelongsToList;
     FHasManyList: TMappingRelationList;
     FHasOneList: TMappingRelationList;
+    FSaveHistory: boolean;
     function GetId: TMappingField;
+    procedure SetSaveHistory(const Value: boolean);
 
   public
     constructor Create;
@@ -224,6 +228,7 @@ type
     function ToString: string; override;
     property package: string read FPackage write FPackage;
     property TableName: string read FTableName write FTableName;
+    property SaveHistory : boolean read FSaveHistory write SetSaveHistory;
     property Id: TMappingField read GetId;
     property Fields: TMappingFieldList read FFields;
     property HasManyList: TMappingRelationList read FHasManyList;
@@ -241,10 +246,11 @@ uses
   dorm.Commons;
 { Entity }
 
-constructor Entity.Create(const ATableName: string = ''; const APackageName: string = '');
+constructor Entity.Create(const ATableName: string = ''; const APackageName: string = ''; ASaveHistory : boolean = false);
 begin
   FTableName := ATableName;
   FPackage := APackageName;
+  FSaveHistory := ASaveHistory;
 end;
 { Column }
 
@@ -385,6 +391,11 @@ begin
   for F in Fields do
     if F.IsPK then
       Exit(F);
+end;
+
+procedure TMappingTable.SetSaveHistory(const Value: boolean);
+begin
+  FSaveHistory := Value;
 end;
 
 function TMappingTable.AddBelongsTo: TMappingBelongsTo;
