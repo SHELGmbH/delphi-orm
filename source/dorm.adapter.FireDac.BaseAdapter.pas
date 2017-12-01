@@ -49,7 +49,7 @@ type
     procedure LoadObjectFromFireDACReader(AObject: TObject; ARttiType: TRttiType; AReader: TFDQuery;
       AFieldsMapping: TMappingFieldList);
     function GetLogger: IdormLogger;
-    procedure SetFireDACParameterValue(AFieldType: string; AStatement: TFDQuery; ParameterIndex: Integer;
+    procedure SetFireDACParameterValue(AField: TMappingField; AStatement: TFDQuery; ParameterIndex: Integer;
       AValue: TValue; AIsNullable: boolean = False);
     function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string; override;
   public
@@ -147,7 +147,7 @@ begin
       if (not field.IsPK) and (not isTransient) then
       begin
         v := TdormUtils.GetField(AObject, field.name);
-        SetFireDACParameterValue(field.FieldType, Query, I, v, isNullable);
+        SetFireDACParameterValue(field, Query, I, v, isNullable);
         inc(I);
       end;
     end;
@@ -156,7 +156,7 @@ begin
     // Retrieve pk value
     v := ARttiType.GetProperty(AMappingTable.Fields[pk_idx].name).GetValue(AObject);
     // Set pk parameter value
-    SetFireDACParameterValue(AMappingTable.Fields[pk_idx].FieldType, Query, I, v);
+    SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, I, v);
 
     GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
     Result := FD.Execute(Query);
@@ -357,7 +357,7 @@ begin
       if (not field.IsPK or field.IsFK) and (not isTransient) then
       begin
         v := TdormUtils.GetField(AObject, field.RTTICache);
-        SetFireDACParameterValue(field.FieldType, Query, I, v, isNullable);
+        SetFireDACParameterValue(field, Query, I, v, isNullable);
         inc(I);
       end;
     end;
@@ -768,24 +768,30 @@ begin
   FD.GetCurrentTransaction.Rollback;
 end;
 
-procedure TFireDACBaseAdapter.SetFireDACParameterValue(AFieldType: string; AStatement: TFDQuery;
+procedure TFireDACBaseAdapter.SetFireDACParameterValue(AField: TMappingField; AStatement: TFDQuery;
   ParameterIndex: Integer; AValue: TValue; AIsNullable: boolean);
 var
   sourceStream: TStream;
   str: TStringStream;
+  StrVal : string;
 begin
-  if CompareText(AFieldType, 'string') = 0 then
+  if CompareText(AField.FieldType, 'string') = 0 then
   begin
-    if length(AValue.AsString) > 8000 then begin
+    if AField.Size > 0 then begin
+      StrVal := AValue.AsString.Substring(0, AField.Size);
+    end else begin
+      StrVal := AValue.AsString;
+    end;
+    if length(StrVal) > 8000 then begin
       AStatement.Params[ParameterIndex].DataType := ftWideMemo;
-      AStatement.Params[ParameterIndex].AsWideMemo := AValue.AsString;
+      AStatement.Params[ParameterIndex].AsWideMemo := StrVal;
     end else begin
       AStatement.Params[ParameterIndex].DataType := ftString;
-      AStatement.Params[ParameterIndex].AsString := AValue.AsString;
+      AStatement.Params[ParameterIndex].AsString := StrVal;
     end;
-    GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + AValue.AsString);
+    GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + StrVal);
   end
-  else if CompareText(AFieldType, 'decimal') = 0 then
+  else if CompareText(AField.FieldType, 'decimal') = 0 then
   begin
     if (AValue.AsExtended = 0.0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -796,7 +802,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
     end;
   end
-  else if CompareText(AFieldType, 'float') = 0 then
+  else if CompareText(AField.FieldType, 'float') = 0 then
   begin
     if (AValue.AsExtended = 0.0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -807,7 +813,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
     end;
   end
-  else if CompareText(AFieldType, 'integer') = 0 then
+  else if CompareText(AField.FieldType, 'integer') = 0 then
   begin
     if (AValue.AsInt64 = 0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -818,13 +824,13 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + IntToStr(AValue.AsInt64));
     end;
   end
-  else if CompareText(AFieldType, 'boolean') = 0 then
+  else if CompareText(AField.FieldType, 'boolean') = 0 then
   begin
     AStatement.Params[ParameterIndex].DataType := ftBoolean;
     AStatement.Params[ParameterIndex].AsBoolean := AValue.AsBoolean;
     GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + BoolToStr(AValue.AsBoolean, true));
   end
-  else if CompareText(AFieldType, 'date') = 0 then
+  else if CompareText(AField.FieldType, 'date') = 0 then
   begin
     if (AValue.AsExtended = 0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -835,7 +841,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDate(trunc(AValue.AsExtended)));
     end;
   end
-  else if CompareText(AFieldType, 'datetime') = 0 then
+  else if CompareText(AField.FieldType, 'datetime') = 0 then
   begin
     if (AValue.AsExtended = 0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -846,7 +852,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDateTime(AValue.AsExtended, true));
     end;
   end
-  else if CompareText(AFieldType, 'time') = 0 then
+  else if CompareText(AField.FieldType, 'time') = 0 then
   begin
     if (AValue.AsExtended = 0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
@@ -857,7 +863,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDateTime(AValue.AsExtended));
     end;
   end
-  else if CompareText(AFieldType, 'blob') = 0 then
+  else if CompareText(AField.FieldType, 'blob') = 0 then
   begin
     sourceStream := TStream(AValue.AsObject);
     if sourceStream = nil then
@@ -880,7 +886,7 @@ begin
     end;
   end
   else
-    raise EdormException.CreateFmt('Parameter type not supported: [%s]', [AFieldType]);
+    raise EdormException.CreateFmt('Parameter type not supported: [%s]', [AField.FieldType]);
 end;
 
 procedure TFireDACBaseAdapter.SetNullParameterValue(AStatement: TFDQuery; ParameterIndex: Integer);
