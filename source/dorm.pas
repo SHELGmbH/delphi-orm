@@ -97,7 +97,7 @@ type
     FMappingStrategy: ICacheMappingStrategy;
     function GetIdValue(AIdMappingField: TMappingField;
       AObject: TObject): TValue;
-    procedure ApplyBackupObject(_Obj : TObject);
+    procedure ApplyBackupObject(_Obj : TObject); virtual;
     // events
     procedure DoSessionOnBeforePersistObject(AObject: TObject);
     procedure DoSessionOnAfterPersistObject(AObject: TObject);

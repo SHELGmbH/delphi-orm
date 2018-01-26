@@ -22,13 +22,14 @@ uses
   RTTI,
   DB,
   Generics.Collections,
-  dorm.Mappings;
+  dorm.Mappings, System.Classes;
 
 type
   TdormUtils = class sealed
+  private
+    class var DontCloneClasses : TStringList;
   public
     class var ctx: TRttiContext;
-
   public
     class function MethodCall(AObject: TObject; AMethodName: string;
       AParameters: array of TValue): TValue;
@@ -62,6 +63,8 @@ type
     class function HasAttribute<T: TCustomAttribute>
       (const Obj: TRttiObject): Boolean;
     class function EqualValues(source, destination: TValue): Boolean;
+    class procedure AddDontCloneClassname(const _Classname : string);
+    class destructor Destroy;
   end;
 
 function FieldFor(const PropertyName: string): string; inline;
@@ -70,7 +73,6 @@ implementation
 
 uses
   SysUtils,
-  Classes,
   TypInfo;
 
 class function TdormUtils.MethodCall(AObject: TObject; AMethodName: string;
@@ -348,6 +350,11 @@ begin
     end;
 end;
 
+class destructor TdormUtils.Destroy;
+begin
+  DontCloneClasses.DisposeOf;
+end;
+
 class function TdormUtils.EqualValues(source, destination: TValue): Boolean;
 begin
   // Really UniCodeCompareStr (Annoying VCL Name for backwards compatablity)
@@ -460,6 +467,14 @@ begin
   // .Invoke(ARttiType.AsInstance.MetaclassType, []).AsObject);
 end;
 
+class procedure TdormUtils.AddDontCloneClassname(const _Classname: string);
+begin
+  if not assigned(DontCloneClasses) then begin
+    DontCloneClasses := TStringList.Create;
+  end;
+  DontCloneClasses.Add(_Classname);
+end;
+
 class function TdormUtils.Clone(Obj: TObject): TObject;
 var
   _ARttiType: TRttiType;
@@ -521,9 +536,20 @@ begin
         begin
           targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
         end;
-      end
-      else
-      begin
+      end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
+        sourceCollection := TObjectList<TObject>(Src);
+        if Field.GetValue(cloned).IsEmpty then begin
+          targetCollection := TObjectList<TObject>(Field.ClassType.Create);
+          Field.SetValue(cloned, targetCollection);
+        end else begin
+          targetCollection := TObjectList<TObject>(Field.GetValue(cloned) .AsObject);
+        end;
+        for I := 0 to sourceCollection.Count - 1 do
+        begin
+          targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
+        end;
+
+      end else if assigned(src) and ((not assigned(DontCloneClasses)) or (DontCloneClasses.IndexOf(src.Classname) < 0)) then begin
         sourceObject := Src;
 
         if Field.GetValue(cloned).IsEmpty then
