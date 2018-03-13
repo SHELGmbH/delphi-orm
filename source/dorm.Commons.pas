@@ -137,6 +137,7 @@ type
     function GetDatabaseBuilder(AEntities: TList<string>; AMappings: ICacheMappingStrategy)
       : IDataBaseBuilder;
     function ExecuteCommand(ACommand: IdormCommand): Int64;
+    procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
   end;
 
   TdormListEnumerator = class(TEnumerator<TObject>)

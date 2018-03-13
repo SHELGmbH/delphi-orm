@@ -79,8 +79,8 @@ type
     function ExecuteAndGetFirst(SQL: string): Int64;
     function GetDatabaseBuilder(AEntities: TList<string>; AMappings: ICacheMappingStrategy): IDataBaseBuilder;
     function ExecuteCommand(ACommand: IdormCommand): Int64;
+    procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
     // End Method Interface IdormPersistStrategy
-
     destructor Destroy; override;
     class procedure register;
   end;
@@ -255,6 +255,11 @@ function TFireDACBaseAdapter.EscapeDateTime(const Value: TDate; AWithMillisSecon
 begin
   Result := FormatDateTime('YYYY-MM-DD&HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
   Result := StringReplace(Result, '&', 'T', [rfReplaceAll]);
+end;
+
+procedure TFireDACBaseAdapter.ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
+begin
+  FD.ExecStoredProcedure(AProcName, _InputParams, _OutputParams);
 end;
 
 function TFireDACBaseAdapter.ExecuteAndGetFirst(SQL: string): Int64;

@@ -66,6 +66,7 @@ type
     function Execute(ASQL: string): Int64; overload;
     function Execute(ASQLCommand: TFDCommand): Int64; overload;
     function Execute(ASQLQuery: TFDQuery): Int64; overload;
+    procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
 
   end;
 
@@ -180,6 +181,36 @@ begin
   Result.Transaction := FCurrentTransaction;
   // M.M. 28/10/2014
   Result.OptionsIntf.FormatOptions.StrsEmpty2Null:=True;
+end;
+
+procedure TFireDACFacade.ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
+var proc : TFDStoredProc;
+    i : integer;
+    ParamName, ParamVal : string;
+begin
+  proc := TFDStoredProc.Create(nil);
+  try
+    proc.Connection := GetConnection;
+    proc.FetchOptions.Items := proc.FetchOptions.Items + [fiMeta];
+    proc.StoredProcName := AProcName;
+    Proc.Params.Clear;
+    Proc.Prepared := True;
+
+    for i := 0 to _InputParams.Count - 1 do begin
+      ParamName := trim(_InputParams.KeyNames[i]);
+      ParamVal  := trim(_InputParams.ValueFromIndex[i]);
+      Proc.Params.ParamByName('@' + ParamName).Value := ParamVal;
+    end;
+
+    proc.ExecProc;
+    for i := 0 to _OutputParams.Count - 1 do begin
+      ParamName := trim(_OutputParams[i]);
+      ParamVal := proc.Params.ParamByName('@' + ParamName).AsString;
+      _OutputParams[i] := ParamName + '=' + trim(ParamVal);
+    end;
+  finally
+    proc.DisposeOf;
+  end;
 end;
 
 function TFireDACFacade.Execute(ASQLQuery: TFDQuery): Int64;
