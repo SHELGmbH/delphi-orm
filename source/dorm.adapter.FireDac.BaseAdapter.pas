@@ -34,8 +34,6 @@ type
   private
     function GetFireDACReaderFor(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue;
       AMappingRelationField: TMappingField = nil): TFDQuery;
-    function GetSqlFieldNames(AMappingTable: TMappingTable; AObject: TObject): string;
-    function GetSqlFieldValues(AMappingTable: TMappingTable; AObject: TObject): string;
     function GetSqlFieldsForUpdate(AMappingTable: TMappingTable; AObject: TObject): string;
     procedure SetNullParameterValue(AStatement: TFDQuery; ParameterIndex: Integer);
   protected
@@ -54,7 +52,8 @@ type
     function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string; override;
   public
     // Start Method Interface IdormPersistStrategy
-    function GetLastInsertOID: TValue;
+    function GetLastInsertOID: TValue; overload;
+    function GetLastInsertOID(_query : TFDQuery): TValue; overload;
     function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;
     function Update(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable;
       ACurrentVersion: Int64): Int64;
@@ -310,6 +309,18 @@ begin
   raise Exception.Create('Not implemented for ' + self.ClassName);
 end;
 
+function TFireDACBaseAdapter.GetLastInsertOID: TValue;
+var
+  Qry: TFDQuery;
+begin
+  Qry := FD.NewQuery;
+  try
+    Result := GetLastInsertOID(Qry);
+  finally
+    Qry.Free;
+  end;
+end;
+
 function TFireDACBaseAdapter.GetLogger: IdormLogger;
 begin
   Result := FLogger;
@@ -367,16 +378,19 @@ begin
       end;
     end;
     GetLogger.Debug('EXECUTING PREPARED :' + string(SQL));
-    FD.Execute(Query);
+    pk_idx := GetPKMappingIndex(AMappingTable.Fields);
+    if pk_idx <> -1 then begin
+      pk_value := GetLastInsertOID(Query);
+      TdormUtils.SetField(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
+    end else begin
+      FD.Execute(Query);
+      pk_value := TValue.Empty;
+    end;
+    Result := pk_value;
+
   finally
     Query.Free;
   end;
-  pk_idx := GetPKMappingIndex(AMappingTable.Fields);
-  pk_value := GetLastInsertOID;
-  if pk_idx <> -1 then begin
-    TdormUtils.SetField(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
-  end;
-  Result := pk_value;
 end;
 
 function TFireDACBaseAdapter.InTransaction: boolean;
@@ -389,75 +403,32 @@ begin
     Result := tr.Active;
 end;
 
-function TFireDACBaseAdapter.GetLastInsertOID: TValue;
+function TFireDACBaseAdapter.GetLastInsertOID(_query : TFDQuery): TValue;
 var
-  Qry: TFDQuery;
   SQL: String;
   field : TField;
 begin
-  SQL := 'SELECT @@IDENTITY AS LAST_IDENTITY';
+  if _query.SQL.Count = 0 then begin
+    SQL := 'SELECT @@IDENTITY AS LAST_IDENTITY';
+  end else begin
+    SQL := 'SELECT SCOPE_IDENTITY() AS LAST_IDENTITY';
+  end;
   GetLogger.Debug('PREPARING: ' + SQL);
-  Qry := FD.NewQuery;
-  try
-    GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
-    Qry.SQL.Text := SQL;
-    Qry.Open;
-    if not Qry.Eof then
-    begin
-      field := Qry.FieldByName('LAST_IDENTITY');
-      if (not field.IsNull) then
-      begin
-        Result := field.AsLargeInt;
-      end
-      else
-        Result := TValue.Empty;
-    end;
-    Qry.Close;
-  finally
-    Qry.Free;
-  end;
-end;
-
-function TFireDACBaseAdapter.GetSqlFieldNames(AMappingTable: TMappingTable; AObject: TObject): string;
-var
-  v: TValue;
-  field: TMappingField;
-  isTransient: boolean;
-begin
-  Result := '';
-  for field in AMappingTable.Fields do
+  GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
+  _query.SQL.Add(';' + SQL);
+  _query.Open;
+  _Query.First;
+  if not _query.Eof then
   begin
-    // manage transients fields
-    isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-
-    if (not field.IsPK) and (not isTransient) then
+    field := _query.FieldByName('LAST_IDENTITY');
+    if (not field.IsNull) then
     begin
-      v := TdormUtils.GetField(AObject, field.name);
-      Result := Result + ',[' + field.FieldName + ']';
-    end;
+      Result := field.AsLargeInt;
+    end
+    else
+      Result := TValue.Empty;
   end;
-  System.Delete(Result, 1, 1);
-end;
-
-function TFireDACBaseAdapter.GetSqlFieldValues(AMappingTable: TMappingTable; AObject: TObject): string;
-var
-  field: TMappingField;
-  isTransient: boolean;
-  v: TValue;
-begin
-  Result := '';
-  for field in AMappingTable.Fields do
-  begin
-    // manage transients fields
-    isTransient := TdormUtils.HasAttribute<Transient>(field.RTTICache.RTTIProp);
-
-    if (not field.IsPK) and (not isTransient) then
-    begin
-      v := TdormUtils.GetField(AObject, field.name);
-      Result := Result + ',:' + field.FieldName;
-    end;
-  end;
-  System.Delete(Result, 1, 1);
+  _query.Close;
 end;
 
 function TFireDACBaseAdapter.GetSqlFieldsForUpdate(AMappingTable: TMappingTable; AObject: TObject): string;
