@@ -705,13 +705,23 @@ begin
       end
       else if CompareText(field.FieldType, 'datetime') = 0 then
       begin
-        v := AReader.FieldByName(field.FieldName).AsDateTime;
-        S := field.FieldName + ' as datetime';
+        f := AReader.FieldByName(field.FieldName);
+        if f.IsNull then begin
+          Continue;
+        end else begin
+          v := f.AsDateTime;
+          S := field.FieldName + ' as datetime';
+        end;
       end
       else if CompareText(field.FieldType, 'time') = 0 then
       begin
-        v := AReader.FieldByName(field.FieldName).AsDateTime;
-        S := field.FieldName + ' as datetime';
+        f := AReader.FieldByName(field.FieldName);
+        if f.IsNull then begin
+          Continue;
+        end else begin
+          v := AReader.FieldByName(field.FieldName).AsDateTime;
+          S := field.FieldName + ' as datetime';
+        end;
       end
       else
         raise Exception.Create('Unknown field type for ' + field.FieldName);
