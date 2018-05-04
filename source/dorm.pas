@@ -97,7 +97,6 @@ type
     FMappingStrategy: ICacheMappingStrategy;
     function GetIdValue(AIdMappingField: TMappingField;
       AObject: TObject): TValue;
-    procedure ApplyBackupObject(_Obj : TObject); virtual;
     // events
     procedure DoSessionOnBeforePersistObject(AObject: TObject);
     procedure DoSessionOnAfterPersistObject(AObject: TObject);
@@ -175,6 +174,7 @@ type
     // Utils
     class function Qualified(AMappingTable: TMappingTable;
       const AClassName: string): string;
+    procedure ApplyBackupObject(_Obj : TObject); virtual;
     procedure BuildDatabase;
     function Clone<T: class, constructor>(Obj: T): T;
     procedure CopyObject(SourceObject, TargetObject: TObject);
