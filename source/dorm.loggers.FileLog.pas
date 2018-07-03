@@ -70,6 +70,8 @@ type
     procedure ExitLevel(const Value: string);
   end;
 
+procedure StopLoggerThread;
+
 implementation
 
 uses
@@ -300,6 +302,16 @@ begin
   Assert(Assigned(FStreamWriter));
 end;
 
+procedure StopLoggerThread;
+begin
+  if Assigned(FLoggerThread) then begin
+    FLoggerThread.Terminate;
+    FLoggerThread.WaitFor;
+    FEvent.WaitFor(TTimeSpan.FromMinutes(1));
+    FreeAndNil(FLoggerThread);
+  end;
+end;
+
 initialization
 
 TdormFileLog.register;
@@ -308,15 +320,7 @@ FEvent := TEvent.Create;
 FEvent.ResetEvent;
 
 finalization
-
-if Assigned(FLoggerThread) then
-begin
-  FLoggerThread.Terminate;
-  FLoggerThread.WaitFor;
-  FEvent.WaitFor(TTimeSpan.FromMinutes(1));
-  FLoggerThread.Free;
-end;
-FEvent.Free;
-cs.Free;
-
+  StopLoggerThread;
+  FEvent.Free;
+  cs.Free;
 end.
