@@ -52,10 +52,11 @@ type
     FConnection: TFDConnection;
     FCurrentTransaction: TFDTransaction;
     FDriverLink: TFDPhysODBCBaseDriverLink;
+    FPooled : boolean;
     function NewCommand: TFDCommand;
     procedure SetConnectionParams;
   public
-    constructor Create(const AConnectionString: string; DriverLink: TFDPhysODBCBaseDriverLink);
+    constructor Create(const AConnectionString: string; DriverLink: TFDPhysODBCBaseDriverLink; _pooled : boolean = false);
     destructor Destroy; override;
     procedure StartTransaction;
     procedure CommitTransaction;
@@ -81,16 +82,20 @@ var
   SlParams: TStringList;
   i: Integer;
 begin
-  SlParams := TStringList.Create;
-  SlParams.Delimiter := ';';
-  SlParams.DelimitedText := FConnectionString;
+  if FPooled then begin
+    FConnection.ConnectionDefName := FConnectionString;
+  end else begin
+    SlParams := TStringList.Create;
+    SlParams.Delimiter := ';';
+    SlParams.DelimitedText := FConnectionString;
 
-  for i := 0 to SlParams.Count-1 do
-  begin
-    FConnection.Params.Add(SlParams.Strings[i]);
+    for i := 0 to SlParams.Count-1 do
+    begin
+      FConnection.Params.Add(SlParams.Strings[i]);
+    end;
+
+    FreeAndNil(SlParams);
   end;
-
-  FreeAndNil(SlParams);
 end;
 
 procedure TFireDACFacade.StartTransaction;
@@ -123,11 +128,12 @@ begin
   end;
 end;
 
-constructor TFireDACFacade.Create(const AConnectionString: string; DriverLink: TFDPhysODBCBaseDriverLink);
+constructor TFireDACFacade.Create(const AConnectionString: string; DriverLink: TFDPhysODBCBaseDriverLink; _pooled : boolean = false);
 begin
   inherited Create;
   FConnectionString := AConnectionString;
   FDriverLink := DriverLink;
+  FPooled := _pooled;
 end;
 
 destructor TFireDACFacade.Destroy;
