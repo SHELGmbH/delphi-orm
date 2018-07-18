@@ -71,11 +71,17 @@ type
 
   end;
 
+  TFDPoolConnection = class(TFDConnection)
+
+  protected
+    procedure SetConnected(Value: Boolean); override;
+  end;
+
 implementation
 
 uses
   sysutils,
-  dorm.Commons;
+  dorm.Commons, FireDAC.Stan.Consts;
 
 procedure TFireDACFacade.SetConnectionParams;
 var
@@ -160,7 +166,7 @@ function TFireDACFacade.GetConnection: TFDConnection;
 begin
   if FConnection = nil then
   begin
-    FConnection := TFDConnection.Create(nil);
+    FConnection := TFDPoolConnection.Create(nil);
     SetConnectionParams;
     FCurrentTransaction := TFDTransaction.Create(nil);
     FCurrentTransaction.Connection := GetConnection;
@@ -223,6 +229,27 @@ function TFireDACFacade.Execute(ASQLQuery: TFDQuery): Int64;
 begin
   ASQLQuery.ExecSQL;
   Result := ASQLQuery.RowsAffected;
+end;
+
+{ TFDPoolConnection }
+
+procedure TFDPoolConnection.SetConnected(Value: Boolean);
+var Cnt : integer;
+begin
+  for Cnt := 0 to 20 do begin
+    try
+      inherited;
+      break;
+    except
+      on e : EFDException do begin
+        if e.FDCode = er_FD_StanPoolTooManyItems then begin
+          sleep(100);
+        end else begin
+          raise e;
+        end;
+      end;
+    end;
+  end;
 end;
 
 end.
