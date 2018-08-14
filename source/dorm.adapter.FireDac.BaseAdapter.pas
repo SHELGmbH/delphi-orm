@@ -79,6 +79,7 @@ type
     function GetDatabaseBuilder(AEntities: TList<string>; AMappings: ICacheMappingStrategy): IDataBaseBuilder;
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
+    function GetConnection : TCustomConnection;
     // End Method Interface IdormPersistStrategy
     destructor Destroy; override;
     class procedure register;
@@ -300,6 +301,11 @@ begin
   finally
     Qry.Free;
   end;
+end;
+
+function TFireDACBaseAdapter.GetConnection: TCustomConnection;
+begin
+  Result := FD.GetConnection;
 end;
 
 function TFireDACBaseAdapter.GetDatabaseBuilder(AEntities: TList<string>; AMappings: ICacheMappingStrategy)
