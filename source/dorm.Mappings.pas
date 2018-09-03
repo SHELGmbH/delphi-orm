@@ -120,6 +120,19 @@ type
   end;
   Transient = class(TCustomAttribute);
 
+  ValueFromFunction = class(TCustomAttribute)
+  private
+    FFuncName: string;
+    FTriggerVal: TValue;
+  public
+    constructor Create(const _FuncName : string; _TriggerVal : integer); overload;
+    constructor Create(const _FuncName : string; _TriggerVal : double); overload;
+    constructor Create(const _FuncName : string; _TriggerVal : boolean); overload;
+    constructor Create(const _FuncName : string; _TriggerVal : string); overload;
+    property TriggerVal : TValue read FTriggerVal;
+    property FuncName : string read FFuncName;
+  end;
+
   // Mapping classes
   TdormIndexType = (itNone, itIndex, itUnique);
   TdormKeyType = (ktInteger, ktString);
@@ -509,6 +522,35 @@ constructor Id.Create(_isFK: boolean);
 begin
   inherited Create;
   FisFK := _isFK;
+end;
+
+{ ValueFromFunction }
+
+constructor ValueFromFunction.Create(const _FuncName : string; _TriggerVal : integer);
+begin
+  FTriggerVal := _TriggerVal;
+  FFuncName := _FuncName;
+end;
+
+constructor ValueFromFunction.Create(const _FuncName: string;
+  _TriggerVal: double);
+begin
+  FTriggerVal := _TriggerVal;
+  FFuncName := _FuncName;
+end;
+
+constructor ValueFromFunction.Create(const _FuncName: string;
+  _TriggerVal: boolean);
+begin
+  FTriggerVal := _TriggerVal;
+  FFuncName := _FuncName;
+end;
+
+constructor ValueFromFunction.Create(const _FuncName: string;
+  _TriggerVal: string);
+begin
+  FTriggerVal := _TriggerVal;
+  FFuncName := _FuncName;
 end;
 
 end.
