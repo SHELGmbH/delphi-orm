@@ -30,7 +30,7 @@ uses
   dorm.Collections,
   dorm.Utils,
   dorm.Mappings.Strategies,
-  dorm.ObjectStatus, System.Types;
+  dorm.ObjectStatus, System.Types, DB;
 
 type
   TDormSaveMode = (os_Insert, os_Update, os_Delete);
@@ -138,6 +138,7 @@ type
       : IDataBaseBuilder;
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
+    function GetConnection : TCustomConnection;
   end;
 
   TdormListEnumerator = class(TEnumerator<TObject>)

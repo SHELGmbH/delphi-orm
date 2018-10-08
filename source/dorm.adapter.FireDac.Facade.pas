@@ -245,7 +245,7 @@ begin
         if e.FDCode = er_FD_StanPoolTooManyItems then begin
           sleep(100);
         end else begin
-          raise e;
+          raise;
         end;
       end;
     end;

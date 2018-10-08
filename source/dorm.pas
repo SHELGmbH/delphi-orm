@@ -308,6 +308,7 @@ type
     procedure Commit(RestartAfterCommit: boolean = false);
     procedure Rollback;
     function IsInTransaction: boolean;
+    function TestConnection(out _Msg : string): boolean;
     // expose mapping
     function GetMapping: ICacheMappingStrategy;
     function GetEntitiesNames: TList<string>;
@@ -2394,6 +2395,20 @@ begin
   CustomCrit := TSQLCustomCriteria.Create('select top 1 * from ' + Table.TableName +
     IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur für MSSQL!
   Result := Load<T>(CustomCrit);
+end;
+
+function TSession.TestConnection(out _Msg : string): boolean;
+begin
+  _Msg := '';
+  try
+    GetStrategy.GetConnection.Connected := True;
+    Result := True;
+  except
+    on e : exception do begin
+      Result := False;
+      _Msg := e.Message;
+    end;
+  end;
 end;
 
 end.
