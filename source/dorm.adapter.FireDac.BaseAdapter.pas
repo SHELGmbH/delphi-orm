@@ -113,7 +113,7 @@ var
   I, pk_idx: Integer;
   v: TValue;
   sql_fields_names: string;
-  pk_field: string;
+  pk_field, pk_val: string;
   isNullable: boolean;
   PKMappingIndexes: TIntegerDynArray;
   ParamFields : TStringList;
@@ -127,7 +127,12 @@ begin
     SQL := Format('UPDATE %S SET %S WHERE [%S] = :' + pk_field, [AMappingTable.TableName, sql_fields_names, pk_field]);
     for I := 1 to Length(PKMappingIndexes) - 1 do begin
       pk_field := AMappingTable.Fields[PKMappingIndexes[I]].FieldName;
-      SQL := SQL + Format(' AND [%S] = ''' +  ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).ToString + '''', [pk_field]);
+      if AMappingTable.Fields[PKMappingIndexes[I]].FieldType = 'datetime' then begin
+        pk_val := EscapeDateTime(ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsExtended, true)
+      end else begin
+        pk_val := ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsString;
+      end;
+      SQL := SQL + Format(' AND [%S] = ''' +  pk_val + '''', [pk_field]);
     end;
     if ACurrentVersion >= 0 then
     begin
