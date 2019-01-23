@@ -121,49 +121,53 @@ begin
   ParamFields := TStringList.Create;
   try
     sql_fields_names := GetSqlFieldsForUpdate(AMappingTable, AObject, ParamFields);
-    // pk_field aufblasen für where
-    PKMappingIndexes := GetPKMappingIndexes(AMappingTable.Fields);
-    pk_field := AMappingTable.Fields[PKMappingIndexes[0]].FieldName;
-    SQL := Format('UPDATE %S SET %S WHERE [%S] = :' + pk_field, [AMappingTable.TableName, sql_fields_names, pk_field]);
-    for I := 1 to Length(PKMappingIndexes) - 1 do begin
-      pk_field := AMappingTable.Fields[PKMappingIndexes[I]].FieldName;
-      if AMappingTable.Fields[PKMappingIndexes[I]].FieldType = 'datetime' then begin
-        pk_val := EscapeDateTime(ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsExtended, true)
-      end else begin
-        pk_val := ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsString;
-      end;
-      SQL := SQL + Format(' AND [%S] = ''' +  pk_val + '''', [pk_field]);
-    end;
-    if ACurrentVersion >= 0 then
-    begin
-      SQL := SQL + ' AND OBJVERSION = ' + IntToStr(ACurrentVersion);
-    end;
-    GetLogger.Debug(AMappingTable.Fields[PKMappingIndexes[0]].FieldName);
-    GetLogger.Debug('NEW QUERY: ' + SQL);
-    Query := FD.NewQuery;
-    Query.SQL.Text := SQL;
-    try
-      I := 0;
-      for field in AMappingTable.Fields do begin
-        // manage nullable fields
-        isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
-        if ParamFields.IndexOf(field.FieldName) >= 0 then begin
-          v := TdormUtils.GetField(AObject, field.name);
-          SetFireDACParameterValue(field, Query, I, v, isNullable);
-          inc(I);
+    if sql_fields_names <> '' then begin
+      // pk_field aufblasen für where
+      PKMappingIndexes := GetPKMappingIndexes(AMappingTable.Fields);
+      pk_field := AMappingTable.Fields[PKMappingIndexes[0]].FieldName;
+      SQL := Format('UPDATE %S SET %S WHERE [%S] = :' + pk_field, [AMappingTable.TableName, sql_fields_names, pk_field]);
+      for I := 1 to Length(PKMappingIndexes) - 1 do begin
+        pk_field := AMappingTable.Fields[PKMappingIndexes[I]].FieldName;
+        if AMappingTable.Fields[PKMappingIndexes[I]].FieldType = 'datetime' then begin
+          pk_val := EscapeDateTime(ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsExtended, true)
+        end else begin
+          pk_val := ARttiType.GetProperty(AMappingTable.Fields[I].name).GetValue(AObject).AsString;
         end;
+        SQL := SQL + Format(' AND [%S] = ''' +  pk_val + '''', [pk_field]);
       end;
-      // Retrieve pk index
-      pk_idx := GetPKMappingIndex(AMappingTable.Fields);
-      // Retrieve pk value
-      v := ARttiType.GetProperty(AMappingTable.Fields[pk_idx].name).GetValue(AObject);
-      // Set pk parameter value
-      SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, I, v);
+      if ACurrentVersion >= 0 then
+      begin
+        SQL := SQL + ' AND OBJVERSION = ' + IntToStr(ACurrentVersion);
+      end;
+      GetLogger.Debug(AMappingTable.Fields[PKMappingIndexes[0]].FieldName);
+      GetLogger.Debug('NEW QUERY: ' + SQL);
+      Query := FD.NewQuery;
+      Query.SQL.Text := SQL;
+      try
+        I := 0;
+        for field in AMappingTable.Fields do begin
+          // manage nullable fields
+          isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
+          if ParamFields.IndexOf(field.FieldName) >= 0 then begin
+            v := TdormUtils.GetField(AObject, field.name);
+            SetFireDACParameterValue(field, Query, I, v, isNullable);
+            inc(I);
+          end;
+        end;
+        // Retrieve pk index
+        pk_idx := GetPKMappingIndex(AMappingTable.Fields);
+        // Retrieve pk value
+        v := ARttiType.GetProperty(AMappingTable.Fields[pk_idx].name).GetValue(AObject);
+        // Set pk parameter value
+        SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, I, v);
 
-      GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
-      Result := FD.Execute(Query);
-    finally
-      Query.Free;
+        GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
+        Result := FD.Execute(Query);
+      finally
+        Query.Free;
+      end;
+    end else begin
+      GetLogger.Debug('No update required, record unchanged');
     end;
   finally
     ParamFields.Free;
@@ -460,11 +464,20 @@ var
   field: TMappingField;
   isTransient: boolean;
   FuncVal : ValueFromFunction;
-  v: TValue;
+  v, vbak: TValue;
+  prop : TRttiProperty;
+  BackupObj : TObject;
 begin
   _ParamFields.Clear;
   _ParamFields.Sorted := True;
   Result := '';
+  prop := TdormUtils.GetPropertyDef(AObject, 'Backup');
+  if assigned(prop) then begin
+    BackupObj := TdormUtils.GetProperty(AObject, 'Backup').AsObject;
+  end else begin
+    BackupObj := nil;
+  end;
+
   for field in AMappingTable.Fields do
   begin
     // manage transients fields
@@ -477,6 +490,12 @@ begin
       if Assigned(FuncVal) then begin
         if FuncVal.TriggerVal.IsEmpty or TdormUtils.EqualValues(FuncVal.TriggerVal, v) then begin
           Result := Result + ',[' + field.FieldName + '] = dbo.' + FuncVal.FuncName;
+          continue;
+        end;
+      end;
+      if assigned(BackupObj) then begin
+        vbak := TdormUtils.GetField(BackupObj, field.name);
+        if v.AsVariant = vbak.AsVariant then begin
           continue;
         end;
       end;
