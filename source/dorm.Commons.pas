@@ -139,6 +139,8 @@ type
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
     function GetConnection : TCustomConnection;
+    function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
+    function GetDBName: string;
   end;
 
   TdormListEnumerator = class(TEnumerator<TObject>)

@@ -80,6 +80,8 @@ type
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
     function GetConnection : TCustomConnection;
+    function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
+    function GetDBName: string;
     // End Method Interface IdormPersistStrategy
     destructor Destroy; override;
     class procedure register;
@@ -324,6 +326,11 @@ begin
   raise Exception.Create('Not implemented for ' + self.ClassName);
 end;
 
+function TFireDACBaseAdapter.GetDBName: string;
+begin
+  Result := FD.GetConnection.Params.Database;
+end;
+
 function TFireDACBaseAdapter.GetLastInsertOID: TValue;
 var
   Qry: TFDQuery;
@@ -504,6 +511,26 @@ begin
     end;
   end;
   System.Delete(Result, 1, 1);
+end;
+
+function TFireDACBaseAdapter.GetFieldTypeAndSize(const _Table, _Field: string;
+  out _Type: TFieldType; out _Size: integer): Boolean;
+var Query: TFDQuery;
+begin
+  Query := FD.NewQuery;
+  try
+    Query.Open('select ' + _Field + ' from ' + _Table + ' where 1 = 0');
+    Query.Open;
+    _Type := Query.Fields[0].DataType;
+    _Size := Query.Fields[0].Size;
+    Query.Close;
+    Result := True;
+  except
+    _Type := ftUnknown;
+    _Size := 0;
+    Result:= False;
+  end;
+  Query.Free;
 end;
 
 function TFireDACBaseAdapter.GetFireDACReaderFor(ARttiType: TRttiType; AMappingTable: TMappingTable;
