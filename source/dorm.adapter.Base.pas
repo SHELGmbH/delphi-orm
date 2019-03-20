@@ -228,6 +228,8 @@ begin
       SQL := SQL + '''' + EscapeString(ACriteriaItem.GetValue.AsString) + ''''
     else if fm.FieldType = 'integer' then
       SQL := SQL + inttostr(ACriteriaItem.GetValue.AsInteger)
+    else if fm.FieldType = 'int64' then
+      SQL := SQL + inttostr(ACriteriaItem.GetValue.AsInt64)
     else if fm.FieldType = 'boolean' then
       SQL := SQL + GetBooleanValueAsString(ACriteriaItem.GetValue.AsBoolean)
     else if fm.FieldType = 'float' then begin

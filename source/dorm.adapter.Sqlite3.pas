@@ -504,7 +504,7 @@ begin
         v := AReader.FieldAsString(AReader.FieldIndex[field.FieldName]);
         S := field.FieldName + ' as string';
       end
-      else if CompareText(field.FieldType, 'integer') = 0 then
+      else if (CompareText(Field.FieldType, 'integer') = 0) or (CompareText(Field.FieldType, 'int64') = 0) then
       begin
         v := AReader.FieldAsInteger(AReader.FieldIndex[field.FieldName]);
         S := field.FieldName + ' as integer';
@@ -641,7 +641,7 @@ begin
     ADB.AddParamText(aParameterName, aValue.AsString);
     GetLogger.Debug(aParameterName + ' = ' + aValue.AsString);
   end
-  else if CompareText(aFieldType, 'integer') = 0 then
+  else if (CompareText(aFieldType, 'integer') = 0) or (CompareText(aFieldType, 'int64') = 0) then
   begin
     ADB.AddParamInt(aParameterName, aValue.AsInteger);
     GetLogger.Debug(aParameterName + ' = ' + IntToStr(aValue.AsInteger));

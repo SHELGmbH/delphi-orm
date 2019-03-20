@@ -273,8 +273,10 @@ begin
   if _PropInfo.Kind in [tkString, tkWString, tkChar, tkWChar, tkLString,
     tkUString] then
     Result := 'string'
-  else if _PropInfo.Kind in [tkInteger, tkInt64] then
+  else if _PropInfo.Kind = tkInteger then
     Result := 'integer'
+  else if _PropInfo.Kind = tkInt64 then
+    Result := 'int64'
   else if _PropInfo = TypeInfo(TDate) then
     Result := 'date'
   else if _PropInfo = TypeInfo(TDateTime) then

@@ -683,7 +683,7 @@ begin
         v := AReader.Fields.ByNameAsString[field.FieldName];
         s := field.FieldName + ' as string';
       end
-      else if CompareText(field.FieldType, 'integer') = 0 then
+      else if (CompareText(field.FieldType, 'integer') = 0) or (CompareText(field.FieldType, 'int64') = 0) then
       begin
         v := AReader.Fields.ByNameAsInteger[field.FieldName];
         s := field.FieldName + ' as integer';
@@ -779,7 +779,7 @@ begin
         v := AReader.Fields.ByNameAsString[field.FieldName];
         s := field.FieldName + ' as string';
       end
-      else if CompareText(field.FieldType, 'integer') = 0 then
+      else if (CompareText(field.FieldType, 'integer') = 0) or (CompareText(field.FieldType, 'int64') = 0) then
       begin
         v := AReader.Fields.ByNameAsInteger[field.FieldName];
         s := field.FieldName + ' as integer';
@@ -880,7 +880,7 @@ begin
       AStatement.Params.AsDouble[ParameterIndex] := AValue.AsExtended;
     GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
   end
-  else if CompareText(AFieldType, 'integer') = 0 then
+  else if (CompareText(AFieldType, 'integer') = 0) or (CompareText(AFieldType, 'int64') = 0) then
   begin
     if IsNullable and CanBeConsideredAsNull(AValue) then
       AStatement.Params.IsNull[ParameterIndex] := true

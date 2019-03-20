@@ -640,6 +640,11 @@ begin
         v := AReader.FieldByName(field.FieldName).AsInteger;
         S := field.FieldName + ' as integer';
       end
+      else if CompareText(field.FieldType, 'int64') = 0 then
+      begin
+        v := AReader.FieldByName(field.FieldName).AsLargeInt;
+        S := field.FieldName + ' as int64';
+      end
       else if CompareText(field.FieldType, 'date') = 0 then
       begin
         v := AReader.FieldByName(field.FieldName).AsDateTime;
@@ -743,6 +748,11 @@ begin
       begin
         v := AReader.FieldByName(field.FieldName).AsInteger;
         S := field.FieldName + ' as integer';
+      end
+      else if CompareText(field.FieldType, 'int64') = 0 then
+      begin
+        v := AReader.FieldByName(field.FieldName).AsLargeInt;
+        S := field.FieldName + ' as int64';
       end
       else if CompareText(field.FieldType, 'date') = 0 then
       begin
@@ -880,7 +890,7 @@ begin
       GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
     end;
   end
-  else if CompareText(AField.FieldType, 'integer') = 0 then
+  else if (CompareText(AField.FieldType, 'integer') = 0) or (CompareText(AField.FieldType, 'int64') = 0) then
   begin
     if (AValue.AsInt64 = 0) and AIsNullable then
       SetNullParameterValue(AStatement, ParameterIndex)
