@@ -15,11 +15,8 @@ type
 
   TdormParameter = class
   private
-    FAsString: string;
     FStrategy: IdormPersistStrategy;
     procedure SetStrategy(const Value: IdormPersistStrategy);
-    procedure SetValue(const Value: TValue);
-
   strict protected
     FParameterType: TdormParameterType;
     FValue: TValue;
@@ -124,7 +121,6 @@ type
     mHaving: string;
     mOrderBy: string;
     mLimit: string;
-    mOffset: string;
 
   strict protected
     function GetTableName(AMappingStrategy: ICacheMappingStrategy;
@@ -316,7 +312,6 @@ end;
 function TFrom.Where(AWhere: string; AParams: array of const): TFrom;
 var
   v: TVarRec;
-  S: String;
 begin
   mWhere := AWhere;
   for v in AParams do
@@ -499,11 +494,6 @@ end;
 procedure TdormParameter.SetStrategy(const Value: IdormPersistStrategy);
 begin
   FStrategy := Value;
-end;
-
-procedure TdormParameter.SetValue(const Value: TValue);
-begin
-  FValue := Value;
 end;
 
 { TDSQLParser }
