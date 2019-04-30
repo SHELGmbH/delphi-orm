@@ -103,12 +103,13 @@ type
   BelongsTo = class(TCustomAttribute)
   private
     FRefPropertyName: string;
+    FFixRelation,
     FLazyLoad: boolean;
-
   public
-    constructor Create(const ARefPropertyName: string; ALazyLoad: boolean = False);
+    constructor Create(const ARefPropertyName: string; ALazyLoad: boolean = False; AFixRelation: boolean = False);
     property RefPropertyName: string read FRefPropertyName;
     property LazyLoad: boolean read FLazyLoad;
+    property FixRelation:  boolean read FFixRelation;
   end;
 
   Id = class(TCustomAttribute)
@@ -201,12 +202,14 @@ type
     FRefFieldName: string;
     FLazyLoad: boolean;
     FRTTICache: TMappingCache;
+    FFixRelation: boolean;
 
   public
     property name: string read FName write FName;
     property OwnerClassName: string read FOwnerClassName write FOwnerClassName;
     property RefFieldName: string read FRefFieldName write FRefFieldName;
     property LazyLoad: boolean read FLazyLoad write FLazyLoad;
+    property FixRelation: boolean read FFixRelation write FFixRelation;
     property RTTICache: TMappingCache read FRTTICache write FRTTICache;
     procedure Assign(Source: TMappingBelongsTo);
   end;
@@ -319,11 +322,12 @@ begin
 end;
 { BelongsTo }
 
-constructor BelongsTo.Create(const ARefPropertyName: string; ALazyLoad: boolean = False);
+constructor BelongsTo.Create(const ARefPropertyName: string; ALazyLoad: boolean = False; AFixRelation: boolean = False);
 begin
   inherited Create;
   FRefPropertyName := ARefPropertyName;
   FLazyLoad := ALazyLoad;
+  FFixRelation := AFixRelation;
 end;
 { TMappingTable }
 
@@ -398,12 +402,12 @@ end;
 
 function TMappingTable.GetId: TMappingField;
 var
-  F: TMappingField;
+  FixRelation: TMappingField;
 begin
   Result := nil;
-  for F in Fields do
-    if F.IsPK then
-      Exit(F);
+  for FixRelation in Fields do
+    if FixRelation.IsPK then
+      Exit(FixRelation);
 end;
 
 procedure TMappingTable.SetSaveHistory(const Value: boolean);
@@ -505,6 +509,7 @@ begin
   FOwnerClassName := Source.OwnerClassName;
   FRefFieldName := Source.RefFieldName;
   FLazyLoad := Source.LazyLoad;
+  FFixRelation := Source.FixRelation;
   FRTTICache := Source.RTTICache;
 end;
 

@@ -2202,16 +2202,18 @@ begin
   GetLogger.EnterLevel('Fixing belongs_to ' + ARttiType.ToString);
   for _belongs_to in AMappingTable.BelongsToList do
   begin
-    ParentObject := TdormUtils.GetProperty(AObject, _belongs_to.Name).AsObject;
-    if assigned(ParentObject) then
-    begin
-      _parent_type := FCTX.FindType( { Qualified(AMappingTable, }
-        _belongs_to.OwnerClassName) { ) };
-      if not assigned(_parent_type) then
-        raise Exception.Create('Unknown type ' + _belongs_to.OwnerClassName);
-      v := GetIdValue(FMappingStrategy.GetMapping(_parent_type).Id,
-        ParentObject);
-      TdormUtils.SetField(AObject, _belongs_to.RefFieldName, v);
+    if _belongs_to.FixRelation then begin
+      ParentObject := TdormUtils.GetProperty(AObject, _belongs_to.Name).AsObject;
+      if assigned(ParentObject) then
+      begin
+        _parent_type := FCTX.FindType( { Qualified(AMappingTable, }
+          _belongs_to.OwnerClassName) { ) };
+        if not assigned(_parent_type) then
+          raise Exception.Create('Unknown type ' + _belongs_to.OwnerClassName);
+        v := GetIdValue(FMappingStrategy.GetMapping(_parent_type).Id,
+          ParentObject);
+        TdormUtils.SetField(AObject, _belongs_to.RefFieldName, v);
+      end;
     end;
   end;
   GetLogger.ExitLevel('Fixing belongs_to ' + ARttiType.ToString);

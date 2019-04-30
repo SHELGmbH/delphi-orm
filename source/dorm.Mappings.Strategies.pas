@@ -500,8 +500,9 @@ begin
     relation.Name := AProp.Name;
     // relation.OwnerClassName := AProp.PropertyType.AsInstance.MetaclassType.ClassName;
     relation.OwnerClassName := AProp.PropertyType.AsInstance.MetaclassType.QualifiedClassName;
-    relation.RefFieldName := HasOne(belongsToAttribute).ChildPropertyName;
-    relation.LazyLoad := isLazy or HasMany(belongsToAttribute).LazyLoad;
+    relation.RefFieldName := BelongsTo(belongsToAttribute).RefPropertyName;
+    relation.LazyLoad := isLazy or BelongsTo(belongsToAttribute).LazyLoad;
+    relation.FixRelation := BelongsTo(belongsToAttribute).FixRelation;
     RTTICache.RTTIProp := AProp;
     relation.RTTICache := RTTICache;
   end;
