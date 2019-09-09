@@ -106,7 +106,7 @@ type
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue;
       AObject: TObject): boolean; overload;
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable;
-      AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject)
+      AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean)
       : boolean; overload;
     procedure DeleteAll(AMappingTable: TMappingTable);
     function Count(AMappingTable: TMappingTable): Int64;
@@ -120,7 +120,7 @@ type
     procedure LoadList(AList: TObject; ARttiType: TRttiType; AMappingTable: TMappingTable;
       ACriteria: ICriteria); overload;
     function GetLastInsertOID: TValue;
-    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject);
+    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject; const UnicodeDB: Boolean);
     procedure InitStrategy;
     procedure StartTransaction;
     procedure Commit;

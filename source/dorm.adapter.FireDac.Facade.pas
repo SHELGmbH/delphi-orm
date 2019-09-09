@@ -47,6 +47,9 @@ uses
 
 type
   TFireDACFacade = class
+  private
+    class var FIsUnicodeDB: Boolean;
+    class procedure SetIsUnicodeDB(const Value: Boolean); static;
   protected
     FConnectionString: string;
     FConnection: TFDConnection;
@@ -68,7 +71,7 @@ type
     function Execute(ASQLCommand: TFDCommand): Int64; overload;
     function Execute(ASQLQuery: TFDQuery): Int64; overload;
     procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
-
+    class property IsUnicodeDB: Boolean read FIsUnicodeDB write SetIsUnicodeDB;
   end;
 
   TFDPoolConnection = class(TFDConnection)
@@ -102,6 +105,11 @@ begin
 
     FreeAndNil(SlParams);
   end;
+end;
+
+class procedure TFireDACFacade.SetIsUnicodeDB(const Value: Boolean);
+begin
+  FIsUnicodeDB := Value;
 end;
 
 procedure TFireDACFacade.StartTransaction;
@@ -186,6 +194,7 @@ begin
   Result := TFDCommand.Create(nil);
   Result.Connection := GetConnection;
   Result.Transaction := FCurrentTransaction;
+  Result.UnicodeDB := IsUnicodeDB;
 end;
 
 function TFireDACFacade.NewQuery: TFDQuery;
@@ -195,6 +204,7 @@ begin
   Result.Transaction := FCurrentTransaction;
   // M.M. 28/10/2014
   Result.OptionsIntf.FormatOptions.StrsEmpty2Null:=True;
+  Result.Adapter.SelectCommand.UnicodeDB := IsUnicodeDB;
 end;
 
 procedure TFireDACFacade.ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);

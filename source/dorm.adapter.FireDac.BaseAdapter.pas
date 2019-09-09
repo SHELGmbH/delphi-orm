@@ -62,12 +62,12 @@ type
     procedure DeleteAll(AMappingTable: TMappingTable);
     function Count(AMappingTable: TMappingTable): Int64;
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable; AMappingRelationField: TMappingField;
-      const Value: TValue; AObject: TObject): boolean; overload;
+      const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean): boolean; overload;
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue; AObject: TObject)
       : boolean; overload;
     procedure LoadList(AList: TObject; ARttiType: TRttiType; AMappingTable: TMappingTable;
       ACriteria: ICriteria); overload;
-    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject); virtual;
+    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject; const UnicodeDB: Boolean); virtual;
     procedure InitStrategy;
     procedure StartTransaction;
     procedure Commit;
@@ -181,12 +181,12 @@ begin
   FD.CommitTransaction;
 end;
 
-procedure TFireDACBaseAdapter.ConfigureStrategy(ConfigurationInfo: ISuperObject);
+procedure TFireDACBaseAdapter.ConfigureStrategy(ConfigurationInfo: ISuperObject; const UnicodeDB: Boolean);
 begin
   FD := CreateFireDACFacade(ConfigurationInfo);
+  FD.IsUnicodeDB := UnicodeDB;
   // TODO: We must implement here keys generator part for other database
   // In SqlServer this part isn't necessary because sequence is missing
-
   inherited;
 end;
 
@@ -570,7 +570,7 @@ begin
 end;
 
 function TFireDACBaseAdapter.Load(ARttiType: TRttiType; AMappingTable: TMappingTable;
-  AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject): boolean;
+  AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean): boolean;
 var
   reader: TFDQuery;
 begin
@@ -581,7 +581,7 @@ begin
     if Result then
       LoadObjectFromFireDACReader(AObject, ARttiType, reader, AMappingTable.Fields);
     reader.Next;
-    if not reader.Eof then
+    if not reader.Eof and not DontRaiseExceptionOnUnexpectedMultiRowResult then
       // there is some problem.... here I should have only one record
       raise EdormException.Create('Singleton select returns more than 1 record');
   finally
@@ -863,7 +863,11 @@ begin
       AStatement.Params[ParameterIndex].DataType := ftWideMemo;
       AStatement.Params[ParameterIndex].AsWideMemo := StrVal;
     end else begin
-      AStatement.Params[ParameterIndex].DataType := ftString;
+      if AStatement.Command.UnicodeDB then begin
+        AStatement.Params[ParameterIndex].DataType := ftWideString;
+      end else begin
+        AStatement.Params[ParameterIndex].DataType := ftString;
+      end;
       AStatement.Params[ParameterIndex].AsString := StrVal;
     end;
     GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + StrVal);

@@ -32,7 +32,7 @@ uses
   dorm.Commons,
   dorm.Query,
   dorm.ObjectStatus,
-  System.SysUtils;
+  System.SysUtils, Data.DB;
 
 type
 
@@ -73,6 +73,7 @@ type
     FOnBeforePersistObject: TdormSessionPersistEvent;
     FOnBeforeConfigureStrategy: TdormStrategyConfigEvent;
     class var FDontRaiseExceptionOnUnexpectedMultiRowResult: boolean;
+    class var FUnicodeDB: Boolean;
     procedure LoadEnter;
     procedure LoadExit;
     procedure ReadIDConfig(const AJsonPersistenceConfig: ISuperObject);
@@ -86,6 +87,7 @@ type
     function Load(ATypeInfo: PTypeInfo; const Value: TValue; AObject: TObject): boolean; overload;
     class procedure SetDontRaiseExceptionOnUnexpectedMultiRowResult(
       const Value: boolean); static;
+    class procedure SetUnicodeDB(const Value: Boolean); static;
   strict protected
     CurrentObjectStatus: TdormObjectStatus;
     FValidatingDuck: TDuckTypedObject;
@@ -282,6 +284,7 @@ type
     // COMMANDERS
     function ExecuteCommand(ACommand: IdormCommand): Int64;
     // utilities
+    function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
     procedure EnableLazyLoad(AClass: TClass; const APropertyName: string);
     procedure DisableLazyLoad(AClass: TClass; const APropertyName: string);
     function Count(AClassType: TClass; ACriteria: ICriteria = nil): Int64;
@@ -322,6 +325,7 @@ type
     property OnBeforeConfigureStrategy: TdormStrategyConfigEvent
       read FOnBeforeConfigureStrategy write FOnBeforeConfigureStrategy;
     class property DontRaiseExceptionOnUnexpectedMultiRowResult : boolean read FDontRaiseExceptionOnUnexpectedMultiRowResult write SetDontRaiseExceptionOnUnexpectedMultiRowResult;
+    class property UnicodeDB: Boolean read FUnicodeDB write SetUnicodeDB;
   end;
 
 implementation
@@ -454,7 +458,7 @@ begin
     FPersistStrategy := GetStrategy;
     if assigned(FOnBeforeConfigureStrategy) then
       FOnBeforeConfigureStrategy(self, _JSonConfigEnv);
-    FPersistStrategy.ConfigureStrategy(_JSonConfigEnv);
+    FPersistStrategy.ConfigureStrategy(_JSonConfigEnv, UnicodeDB);
     FPersistStrategy.InitStrategy;
   except
     on E: Exception do
@@ -936,6 +940,12 @@ begin
   Result := EnvironmentNames[ord(FEnvironment)];
 end;
 
+function TSession.GetFieldTypeAndSize(const _Table, _Field: string;
+  out _Type: TFieldType; out _Size: integer): Boolean;
+begin
+  Result := GetStrategy.GetFieldTypeAndSize(_Table, _Field, _Type, _Size);
+end;
+
 function TSession.LoadByMappingField(ATypeInfo: PTypeInfo;
   AMappingField: TMappingField; const Value: TValue): TObject;
 var
@@ -952,7 +962,7 @@ begin
   begin
     Obj := TdormUtils.CreateObject(rt);
     try
-      if FPersistStrategy.Load(rt, _table, AMappingField, Value, Obj) then
+      if FPersistStrategy.Load(rt, _table, AMappingField, Value, Obj, DontRaiseExceptionOnUnexpectedMultiRowResult) then
       begin
         Result := Obj;
         AddAsLoadedObject(Result, _table.Id);
@@ -1617,7 +1627,7 @@ begin
   _table := FMappingStrategy.GetMapping(rt);
   _validateable := WrapAsValidateableObject(AObject, FValidatingDuck);
   _validateable.OnBeforeLoad;
-  Result := FPersistStrategy.Load(rt, _table, AMappingField, Value, AObject);
+  Result := FPersistStrategy.Load(rt, _table, AMappingField, Value, AObject, DontRaiseExceptionOnUnexpectedMultiRowResult);
   if Result then
   begin
     _idValue := GetIdValue(_table.Id, AObject);
@@ -2411,6 +2421,11 @@ begin
       _Msg := e.Message;
     end;
   end;
+end;
+
+class procedure TSession.SetUnicodeDB(const Value: Boolean);
+begin
+  FUnicodeDB := Value;
 end;
 
 end.
