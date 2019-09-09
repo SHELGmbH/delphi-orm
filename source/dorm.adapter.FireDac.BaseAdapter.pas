@@ -124,7 +124,7 @@ begin
   try
     sql_fields_names := GetSqlFieldsForUpdate(AMappingTable, AObject, ParamFields);
     if sql_fields_names <> '' then begin
-      // pk_field aufblasen für where
+      // pk_field aufblasen fuer where
       PKMappingIndexes := GetPKMappingIndexes(AMappingTable.Fields);
       pk_field := AMappingTable.Fields[PKMappingIndexes[0]].FieldName;
       SQL := Format('UPDATE %S SET %S WHERE [%S] = :' + pk_field, [AMappingTable.TableName, sql_fields_names, pk_field]);

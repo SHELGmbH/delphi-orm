@@ -1249,7 +1249,7 @@ begin
   rt := FCTX.GetType(ItemTypeInfo);
   Table := FMappingStrategy.GetMapping(rt);
   CustomCrit := TSQLCustomCriteria.Create('select * from ' + Table.TableName +
-    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur für MSSQL!
+    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur fuer MSSQL!
   Result := LoadList<T>(CustomCrit);
 end;
 
@@ -2395,7 +2395,7 @@ begin
   rt := FCTX.GetType(ItemTypeInfo);
   Table := FMappingStrategy.GetMapping(rt);
   CustomCrit := TSQLCustomCriteria.Create('select top 1 * from ' + Table.TableName +
-    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur für MSSQL!
+    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur fuer MSSQL!
   Result := Load<T>(CustomCrit);
 end;
 
