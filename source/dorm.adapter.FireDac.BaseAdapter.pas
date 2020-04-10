@@ -859,7 +859,7 @@ begin
     end else begin
       StrVal := AValue.AsString;
     end;
-    if length(StrVal) > 8000 then begin
+    if ByteLength(StrVal) > 8000 then begin
       AStatement.Params[ParameterIndex].DataType := ftWideMemo;
       AStatement.Params[ParameterIndex].AsWideMemo := StrVal;
     end else begin
