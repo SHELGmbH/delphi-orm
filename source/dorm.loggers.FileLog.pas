@@ -45,7 +45,9 @@ type
       procedure Append(const Value: String);
       destructor Destroy; override;
     end;
-
+  private
+    class var FLogPath: string;
+    class procedure SetLogPath(const Value: string); static;
   protected
     FIndent: Integer;
     FFile: TStreamWriter;
@@ -68,6 +70,7 @@ type
     procedure AfterConstruction; override;
     procedure EnterLevel(const Value: string);
     procedure ExitLevel(const Value: string);
+    class property LogPath : string read FLogPath write SetLogPath;
   end;
 
 procedure StopLoggerThread;
@@ -184,6 +187,11 @@ begin
   //
 end;
 
+class procedure TdormFileLog.SetLogPath(const Value: string);
+begin
+  FLogPath := Value;
+end;
+
 procedure TdormFileLog.Warning(const Value: string);
 begin
   Log('[WARNING] ' + Value);
@@ -240,6 +248,9 @@ var
   ext: string;
 begin
   mname := GetModuleName(HInstance);
+  if TdormFileLog.LogPath <> '' then begin
+    mname := IncludeTrailingPathDelimiter(TdormFileLog.LogPath) + ExtractFileName(mname);
+  end;
   ext := ExtractFileExt(mname);
   Delete(mname, Length(mname) - Length(ext) + 1, Length(mname));
   if FileIndex = 0 then

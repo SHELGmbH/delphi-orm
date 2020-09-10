@@ -33,6 +33,7 @@ type
     function MergeHasOneTo(ARelation: TMappingRelation; AOutput: TMappingTable): Boolean;
     function MergeHasManyTo(ARelation: TMappingRelation; AOutput: TMappingTable): Boolean;
     function MergeBelongsTo(ARelation: TMappingBelongsTo; AOutput: TMappingTable): Boolean;
+    function MergeJoinTablesTo(ARelation: TJoinTable; AOutput: TMappingTable): Boolean;
 
   public
     procedure Merge(AOutput: TMappingTable; AInput: array of TMappingTable);
@@ -107,6 +108,8 @@ type
       AProp: TRttiProperty);
     function ParseBelongsTo(AType: TRttiType; ATable: TMappingTable;
       AProp: TRttiProperty): Boolean;
+    function ParseJoinTable(AType: TRttiType; ATable: TMappingTable;
+      AProp: TRttiProperty): Boolean;
     procedure ParseHasMany(AType, ACollectionItemType: TRttiType;
       ATable: TMappingTable; AProp: TRttiProperty);
     function ClassHasProperty(AType: TRttiType; const APropertyName: string): Boolean;
@@ -155,6 +158,7 @@ function TCacheMappingStrategy.GetMapping(const AType: TRttiType): TMappingTable
 var
   tables: array of TMappingTable;
   i: Integer;
+  p : TRttiProperty;
 begin
   if not FMappings.TryGetValue(AType, Result) then
   begin
@@ -169,6 +173,14 @@ begin
       if Result.TableName = EmptyStr then
         raise Exception.Create(Format('Cound not find mapping to Class %s', [AType.QualifiedName]));
       FMappings.Add(AType, Result);
+      for i := 0 to Result.JoinTableList.Count - 1 do begin
+        if not assigned(Result.JoinTableList[i].MappingTable) then begin
+          p := AType.GetProperty(Result.JoinTableList[i].PropName);
+          if assigned(p) then begin
+            Result.JoinTableList[i].MappingTable := GetMapping(p.PropertyType);
+          end;
+        end;
+      end;
     finally
       for i := 0 to high(tables) do
         tables[i].Free;
@@ -554,8 +566,8 @@ begin
       else if not ParseBelongsTo(AType, ATable, prop) then
         if prop.PropertyType.AsInstance.MetaclassType.InheritsFrom(TStream) then
           ParseField(ATable, prop)
-        else
-          ParseHasOne(AType, ATable, prop);
+        else if not ParseJoinTable(AType, ATable, prop) then
+          ParseHasOne(AType, ATable, prop)
     end
     else if not prop.PropertyType.IsRecord and not prop.PropertyType.IsSet then
       ParseField(ATable, prop);
@@ -601,6 +613,21 @@ begin
     relation.ChildClassName := AProp.PropertyType.QualifiedName;
     relation.ChildFieldName := ChildFieldName;
     relation.LazyLoad := false;
+  end;
+end;
+
+function TCoCMappingStrategy.ParseJoinTable(AType: TRttiType;
+  ATable: TMappingTable; AProp: TRttiProperty): Boolean;
+var joinattr : Join;
+    jointab : TJoinTable;
+begin
+  Result := False;
+  joinattr := TdormUtils.GetAttribute<Join>(AProp);
+  if Assigned(joinattr) then begin
+    jointab := ATable.AddJoinTable;
+    jointab.PropName := AProp.Name;
+    jointab.Qualifier := joinattr.Qualifier;
+    jointab.JoinClause := joinattr.JoinClause;
   end;
 end;
 
@@ -713,6 +740,7 @@ var
   hasOneToMerge: TMappingRelation;
   hasManyToMerge: TMappingRelation;
   belongsToToMerge: TMappingBelongsTo;
+  joinTablesToMerge: TJoinTable;
 begin
   for tableToMerge in AInput do
   begin
@@ -749,6 +777,12 @@ begin
       if MergeBelongsTo(belongsToToMerge, AOutput) then
         Continue;
       AOutput.AddBelongsTo.Assign(belongsToToMerge);
+    end;
+
+    for joinTablesToMerge in tableToMerge.JoinTableList do begin
+      if MergeJoinTablesTo(joinTablesToMerge, AOutput) then
+        Continue;
+      AOutput.AddJoinTable.Assign(joinTablesToMerge);
     end;
 
   end;
@@ -827,6 +861,32 @@ var
 begin
   outRelation := AOutput.FindHasOneByName(ARelation.Name);
   Result := MergeRelation(ARelation, outRelation)
+end;
+
+function TMappingTableMerger.MergeJoinTablesTo(ARelation: TJoinTable;
+  AOutput: TMappingTable): Boolean;
+var
+  outRelation: TJoinTable;
+begin
+  outRelation := AOutput.FindJoinTableByName(ARelation.PropName);
+  Result := Assigned(outRelation);
+  if Result then begin
+    if (Trim(outRelation.PropName) = EmptyStr)
+      and not SameText(outRelation.PropName, ARelation.PropName) then
+      outRelation.PropName := ARelation.PropName;
+
+    if (Trim(outRelation.Qualifier) = EmptyStr)
+      and not SameText(outRelation.Qualifier, ARelation.Qualifier) then
+      outRelation.Qualifier := ARelation.Qualifier;
+
+    if (Trim(outRelation.JoinClause) = EmptyStr)
+      and not SameText(outRelation.JoinClause, ARelation.JoinClause) then
+      outRelation.JoinClause := ARelation.JoinClause;
+
+    if not assigned(outRelation.MappingTable) then begin
+      outRelation.MappingTable := ARelation.MappingTable;
+    end;
+  end;
 end;
 
 function TMappingTableMerger.MergeHasManyTo(ARelation: TMappingRelation;

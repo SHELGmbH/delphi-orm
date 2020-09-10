@@ -134,6 +134,16 @@ type
     property FuncName : string read FFuncName;
   end;
 
+  Join = class(TCustomAttribute)
+  private
+    FJoinClause: string;
+    FQualifier: string;
+  public
+    constructor Create(const _Qualifier : string; const _JoinClause : string = '');
+    property Qualifier : string read FQualifier;
+    property JoinClause : string read FJoinClause;
+  end;
+
   // Mapping classes
   TdormIndexType = (itNone, itIndex, itUnique);
   TdormKeyType = (ktInteger, ktString);
@@ -214,9 +224,28 @@ type
     procedure Assign(Source: TMappingBelongsTo);
   end;
 
-  TMappingFieldList = class(TObjectList<TMappingField>);
+  TJoinTable = class
+  private
+    FJoinClause: string;
+    FPropName: string;
+    FQualifier: string;
+    FMappingTable: TMappingTable;
+  public
+    property PropName : string read FPropName write FPropName;
+    property Qualifier: string read FQualifier write FQualifier;
+    property JoinClause: string read FJoinClause write FJoinClause;
+    property MappingTable: TMappingTable read FMappingTable write FMappingTable;
+    procedure Assign(Source: TJoinTable);
+  end;
+
+  TMappingFieldList = class(TObjectList<TMappingField>)
+  public
+    constructor Create;
+    function BinSearchByFieldName(const _Fieldname : string): TMappingField;
+  end;
   TMappingRelationList = class(TObjectList<TMappingRelation>);
   TMappingBelongsToList = class(TObjectList<TMappingBelongsTo>);
+  TJoinTableList = class(TObjectList<TJoinTable>);
 
   TMappingTable = class
   private
@@ -226,6 +255,7 @@ type
     FBelongsToList: TMappingBelongsToList;
     FHasManyList: TMappingRelationList;
     FHasOneList: TMappingRelationList;
+    FJoinTableList : TJoinTableList;
     FSaveHistory: boolean;
     function GetId: TMappingField;
     procedure SetSaveHistory(const Value: boolean);
@@ -237,10 +267,12 @@ type
     function FindHasOneByName(const AName: string): TMappingRelation;
     function FindHasManyByName(const AName: string): TMappingRelation;
     function FindBelongsToByName(const AName: string): TMappingBelongsTo;
+    function FindJoinTableByName(const AName: string): TJoinTable;
     function AddField: TMappingField;
     function AddBelongsTo: TMappingBelongsTo;
     function AddHasMany: TMappingRelation;
     function AddHasOne: TMappingRelation;
+    function AddJoinTable: TJoinTable;
     function ToString: string; override;
     property package: string read FPackage write FPackage;
     property TableName: string read FTableName write FTableName;
@@ -250,6 +282,7 @@ type
     property HasManyList: TMappingRelationList read FHasManyList;
     property HasOneList: TMappingRelationList read FHasOneList;
     property BelongsToList: TMappingBelongsToList read FBelongsToList;
+    property JoinTableList: TJoinTableList read FJoinTableList;
   end;
 
 implementation
@@ -259,7 +292,7 @@ uses
   Variants,
   StrUtils,
   dorm.Utils,
-  dorm.Commons;
+  dorm.Commons, System.Generics.Defaults;
 { Entity }
 
 constructor Entity.Create(const ATableName: string = ''; const APackageName: string = ''; ASaveHistory : boolean = false);
@@ -337,6 +370,7 @@ begin
   FHasOneList := TMappingRelationList.Create;
   FHasManyList := TMappingRelationList.Create;
   FBelongsToList := TMappingBelongsToList.Create;
+  FJoinTableList := TJoinTableList.Create;
   FTableName := '';
   FPackage := '';
 end;
@@ -347,6 +381,7 @@ begin
   FHasManyList.Free;
   FHasOneList.Free;
   FBelongsToList.Free;
+  FJoinTableList.Free;
   inherited;
 end;
 
@@ -400,6 +435,16 @@ begin
       Exit(_Rel);
 end;
 
+function TMappingTable.FindJoinTableByName(const AName: string): TJoinTable;
+var
+  _Rel: TJoinTable;
+begin
+  Result := nil;
+  for _Rel in JoinTableList do
+    if AnsiSameText(_Rel.PropName, AName) then
+      Exit(_Rel);
+end;
+
 function TMappingTable.GetId: TMappingField;
 var
   FixRelation: TMappingField;
@@ -437,6 +482,12 @@ function TMappingTable.AddHasOne: TMappingRelation;
 begin
   Result := TMappingRelation.Create;
   FHasOneList.Add(Result);
+end;
+
+function TMappingTable.AddJoinTable: TJoinTable;
+begin
+  Result := TJoinTable.Create;
+  FJoinTableList.Add(Result);
 end;
 
 function TMappingTable.ToString: string;
@@ -556,6 +607,53 @@ constructor ValueFromFunction.Create(const _FuncName: string;
 begin
   FTriggerVal := _TriggerVal;
   FFuncName := _FuncName;
+end;
+
+{ Join }
+
+constructor Join.Create(const _Qualifier, _JoinClause: string);
+begin
+  FQualifier := _Qualifier;
+  FJoinClause := _JoinClause;
+end;
+
+{ TJoinTable }
+
+procedure TJoinTable.Assign(Source: TJoinTable);
+begin
+  FPropName := Source.PropName;
+  FQualifier := Source.Qualifier;
+  FJoinClause := Source.JoinClause;
+  FMappingTable := Source.MappingTable;
+end;
+
+{ TMappingFieldList }
+
+function TMappingFieldList.BinSearchByFieldName(
+  const _Fieldname: string): TMappingField;
+var ToFind: TMappingField;
+    Idx: Integer;
+begin
+  Result := nil;
+  if Count > 0 then begin
+    ToFind := TMappingField.Create;
+    try
+      ToFind.FieldName := _Fieldname;
+      if BinarySearch(ToFind, Idx) then begin
+        Result := Items[Idx];
+      end;
+    finally
+      ToFind.DisposeOf;
+    end;
+  end;end;
+
+constructor TMappingFieldList.Create;
+begin
+  inherited Create(TComparer<TMappingField>.Construct(function (const L, R: TMappingField): Integer
+                    begin
+                      Result:= CompareText(L.FieldName, R.FieldName);
+                    end
+                  ));
 end;
 
 end.

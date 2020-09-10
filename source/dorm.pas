@@ -226,7 +226,7 @@ type
       ARaiseExceptionIfNotExists: boolean = true);
     procedure SetObjectsStatus(ACollection: TObject; AStatus: TdormObjectStatus;
       ARaiseExceptionIfNotExists: boolean = true); overload;
-    procedure SetObjectsStatus(ACollection: IWrappedList; AStatus: TdormObjectStatus;
+    procedure SetObjectsStatus(ACollection: IWrappedList; AStatus: TdormObjectStatus; _table: TMappingTable = nil;
       ARaiseExceptionIfNotExists: boolean = true; ACallOnAfterLoad: boolean = true); overload;
     function GetCurrentAndIncrementObjectVersion(AObject: TObject;
       out ACurrentVersion: Int64;
@@ -760,7 +760,7 @@ begin
   TdormUtils.MethodCall(ACollection, 'Clear', []);
   GetStrategy.LoadList(ACollection, rt, _table, ACriteria);
   List := WrapAsList(ACollection);
-  SetObjectsStatus(List, osClean, false, true);
+  SetObjectsStatus(List, osClean, _table, false, true);
   GetLogger.ExitLevel(SearcherClassname);
 end;
 
@@ -1144,7 +1144,7 @@ begin
       { todo: callafterloadevent }
       List := WrapAsList(Coll);
       AddAsLoadedObject(list, ChildTable.Id);
-      SetObjectsStatus(list, osClean, false);
+      SetObjectsStatus(list, osClean, ChildTable, false);
       LoadRelationsForEachElement(Coll);
     end
     else
@@ -1292,7 +1292,7 @@ begin
 
   GetStrategy.LoadList(AObject, rt, Table, Criteria);
   List := WrapAsList(AObject);
-  SetObjectsStatus(List, osClean, false, true);
+  SetObjectsStatus(List, osClean, Table, false, true);
   GetLogger.ExitLevel(SearcherClassname);
 
 end;
@@ -1794,17 +1794,30 @@ begin
 end;
 
 procedure TSession.SetObjectsStatus(ACollection: IWrappedList;
-  AStatus: TdormObjectStatus; ARaiseExceptionIfNotExists: boolean; ACallOnAfterLoad: boolean);
+  AStatus: TdormObjectStatus; _table: TMappingTable; ARaiseExceptionIfNotExists: boolean; ACallOnAfterLoad: boolean);
 var
-  Obj: TObject;
+  Obj, SubObj: TObject;
   _validateable: TdormValidateable;
+  i: Integer;
+  v : TValue;
 begin
-  for Obj in ACollection do
-  begin
+  for Obj in ACollection do begin
+    if not assigned(_table) then begin
+      _table := FMappingStrategy.GetMapping(FCTX.GetType(Obj.ClassType));
+    end;
     SetObjectStatus(Obj, AStatus, ARaiseExceptionIfNotExists);
     _validateable := WrapAsValidateableObject(Obj, FValidatingDuck);
     _validateable.OnAfterLoad;
     ApplyBackupObject(Obj);
+    for i := 0 to _table.JoinTableList.Count - 1 do begin
+      v := TdormUtils.GetProperty(Obj, _table.JoinTableList[i].PropName);
+      if v.IsObject then begin
+        SubObj := v.AsObject;
+        _validateable := WrapAsValidateableObject(SubObj, FValidatingDuck);
+        _validateable.OnAfterLoad;
+        ApplyBackupObject(SubObj);
+      end;
+    end;
   end;
 end;
 
@@ -2171,7 +2184,7 @@ begin
   GetStrategy.LoadList(ACollection, rt, _table, ASQLable.ToSQL(self.GetMapping,
     self.GetStrategy));
   List := WrapAsList(ACollection);
-  SetObjectsStatus(List, osClean, false, true);
+  SetObjectsStatus(List, osClean, _table, false, true);
   GetLogger.ExitLevel('FillListSQL');
 end;
 
