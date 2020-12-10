@@ -72,10 +72,11 @@ type
     ['{3501FE53-3781-4F6F-BE6C-80A2309D8D94}']
     procedure EnterLevel(const Value: string);
     procedure ExitLevel(const Value: string);
-    procedure Error(const Value: string);
+    procedure Error(const Value: string; const _SQL : string = '');
     procedure Warning(const Value: string);
     procedure Info(const Value: string);
     procedure Debug(const Value: string);
+    procedure LogCall(const SQL: string; StartTime : TDateTime);
   end;
 
   IDataBaseBuilder = interface

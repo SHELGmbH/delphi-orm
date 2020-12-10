@@ -119,6 +119,7 @@ var
   isNullable: boolean;
   PKMappingIndexes: TIntegerDynArray;
   ParamFields : TStringList;
+  ts : TDateTime;
 begin
   ParamFields := TStringList.Create;
   try
@@ -163,8 +164,17 @@ begin
         // Set pk parameter value
         SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, I, v);
 
+        ts := Now;
         GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
-        Result := FD.Execute(Query);
+        try
+          Result := FD.Execute(Query);
+          GetLogger.LogCall(Query.SQL.Text, ts);
+        except
+          on e : Exception do begin
+            GetLogger.Error(e.Message, Query.SQL.Text);
+            raise;
+          end;
+        end;
       finally
         Query.Free;
       end;
@@ -250,10 +260,20 @@ end;
 procedure TFireDACBaseAdapter.DeleteAll(AMappingTable: TMappingTable);
 var
   SQL: string;
+  ts : TDateTime;
 begin
   SQL := 'DELETE FROM ' + AMappingTable.TableName;
   GetLogger.Debug('EXECUTING :' + SQL);
-  FD.Execute(SQL);
+  ts := Now;
+  try
+    FD.Execute(SQL);
+    GetLogger.LogCall(SQL, ts);
+  except
+    on e : Exception do begin
+      GetLogger.Error(e.Message, SQL);
+      raise;
+    end;
+  end;
 end;
 
 destructor TFireDACBaseAdapter.Destroy;
@@ -276,6 +296,7 @@ end;
 function TFireDACBaseAdapter.ExecuteAndGetFirst(SQL: string): Int64;
 var
   Qry: TFDQuery;
+  ts : TDateTime;
 begin
   GetLogger.EnterLevel('ExecuteAndGetFirst');
   GetLogger.Info('PREPARING: ' + SQL);
@@ -283,12 +304,21 @@ begin
   try
     GetLogger.Info('EXECUTING: ' + SQL);
     Qry.SQL.Text := SQL;
-    Qry.Open;
-    if not Qry.Eof then
-      Result := Int64(Qry.Fields[0].AsLargeInt)
-    else
-      raise EdormException.Create('ExecuteAndGetFirst returns 0 rows');
-    Qry.Close;
+    ts := Now;
+    try
+      Qry.Open;
+      if not Qry.Eof then
+        Result := Int64(Qry.Fields[0].AsLargeInt)
+      else
+        raise EdormException.Create('ExecuteAndGetFirst returns 0 rows');
+      Qry.Close;
+      GetLogger.LogCall(SQL, ts);
+    except
+      on e : Exception do begin
+        GetLogger.Error(e.Message, SQL);
+        raise;
+      end;
+    end;
   finally
     GetLogger.ExitLevel('ExecuteAndGetFirst');
     Qry.Free;
@@ -299,15 +329,25 @@ function TFireDACBaseAdapter.ExecuteCommand(ACommand: IdormCommand): Int64;
 var
   SQL: string;
   Qry: TFDQuery;
+  ts : TDateTime;
 begin
   SQL := ACommand.GetSQL;
   GetLogger.Debug('EXECUTING: ' + SQL);
   Qry := FD.NewQuery;
+  ts := Now;
   try
     // if reader.Params.ParamCount <> 0 then
     // raise EdormException.Create('Parameters not replaced');
     Qry.SQL.Text := SQL;
-    Qry.Execute;
+    try
+      Qry.Execute;
+      GetLogger.LogCall(SQL, ts);
+    except
+      on e : Exception do begin
+        GetLogger.Error(e.Message, SQL);
+        raise;
+      end;
+    end;
     Result := Qry.RowsAffected;
   finally
     Qry.Free;
@@ -359,6 +399,7 @@ var
   isNullable: boolean;
   FuncVal : ValueFromFunction;
   ParamFields : TStringList;
+  ts : TDateTime;
 begin
   ParamFields := TStringList.Create;
   try
@@ -389,7 +430,6 @@ begin
     end;
     System.Delete(sql_fields_names, 1, 1);
     System.Delete(sql_fields_values, 1, 1);
-
     SQL := Format('INSERT INTO %s (%s) VALUES (%s)', [AMappingTable.TableName, sql_fields_names, sql_fields_values]);
     GetLogger.Debug('PREPARING :' + SQL);
 
@@ -409,17 +449,25 @@ begin
           inc(I);
         end;
       end;
+      ts := Now;
       GetLogger.Debug('EXECUTING PREPARED :' + string(SQL));
       pk_idx := GetPKMappingIndex(AMappingTable.Fields);
-      if pk_idx <> -1 then begin
-        pk_value := GetLastInsertOID(Query);
-        TdormUtils.SetField(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
-      end else begin
-        FD.Execute(Query);
-        pk_value := TValue.Empty;
+      try
+        if pk_idx <> -1 then begin
+          pk_value := GetLastInsertOID(Query);
+          TdormUtils.SetField(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
+        end else begin
+          FD.Execute(Query);
+          pk_value := TValue.Empty;
+        end;
+        Result := pk_value;
+        GetLogger.LogCall(Query.SQL.Text, ts);
+      except
+        on e : Exception do begin
+          GetLogger.Error(e.Message, Query.SQL.Text);
+          raise;
+        end;
       end;
-      Result := pk_value;
-
     finally
       Query.Free;
     end;
@@ -537,8 +585,14 @@ function TFireDACBaseAdapter.GetFireDACReaderFor(ARttiType: TRttiType; AMappingT
   const Value: TValue; AMappingRelationField: TMappingField): TFDQuery;
 var
   pk_idx: Integer;
-  pk_field_name, SQL: string;
+  pk_field_name, SQL, ValStr: string;
 begin
+  if Value.IsOrdinal then begin
+    ValStr := Value.AsInt64.ToString;
+  end else begin
+    ValStr := QuotedStr(Value.AsString);
+  end;
+
   if AMappingRelationField = nil then
   begin
     pk_idx := GetPKMappingIndex(AMappingTable.Fields);
@@ -546,7 +600,7 @@ begin
       raise Exception.Create('Invalid primary key for table ' + AMappingTable.TableName);
     pk_field_name := AMappingTable.Fields[pk_idx].FieldName;
     SQL := 'SELECT ' + GetSelectFieldsList(AMappingTable.Fields, true) + ' FROM ' + AMappingTable.TableName + ' WHERE ['
-      + pk_field_name + '] = :' + pk_field_name;
+      + pk_field_name + '] = ' + ValStr;
   end
   else
   begin
@@ -555,37 +609,40 @@ begin
       raise Exception.Create('Invalid primary key for table ' + AMappingTable.TableName);
     pk_field_name := AMappingTable.Fields[pk_idx].FieldName;
     SQL := 'SELECT ' + GetSelectFieldsList(AMappingTable.Fields, true) + ' FROM ' + AMappingTable.TableName + ' WHERE ['
-      + AMappingRelationField.FieldName + '] = :' + pk_field_name;
+      + AMappingRelationField.FieldName + '] = ' + ValStr;
   end;
   GetLogger.Debug('PREPARING: ' + SQL);
   Result := FD.NewQuery;
   Result.SQL.Text := SQL;
-  if Value.IsOrdinal then begin
-    Result.Params[0].DataType := ftLargeint;
-    Result.Params[0].AsLargeInt := Value.AsInt64;
-  end else begin
-    Result.Params[0].DataType := ftString;
-    Result.Params[0].AsString := Value.AsString;
-  end;
 end;
 
 function TFireDACBaseAdapter.Load(ARttiType: TRttiType; AMappingTable: TMappingTable;
   AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean): boolean;
 var
   reader: TFDQuery;
+  ts: TDateTime;
 begin
+  ts := now;
   reader := GetFireDACReaderFor(ARttiType, AMappingTable, Value, AMappingRelationField);
   try
-    reader.Open();
-    Result := not reader.Eof;
-    if Result then
-      LoadObjectFromFireDACReader(AObject, ARttiType, reader, AMappingTable.Fields);
-    reader.Next;
-    if not reader.Eof and not DontRaiseExceptionOnUnexpectedMultiRowResult then
-      // there is some problem.... here I should have only one record
-      raise EdormException.Create('Singleton select returns more than 1 record');
-  finally
-    reader.Free;
+    try
+      reader.Open();
+      GetLogger.LogCall(reader.SQL.Text, ts);
+      Result := not reader.Eof;
+      if Result then
+        LoadObjectFromFireDACReader(AObject, ARttiType, reader, AMappingTable.Fields);
+      reader.Next;
+      if not reader.Eof and not DontRaiseExceptionOnUnexpectedMultiRowResult then
+        // there is some problem.... here I should have only one record
+        raise EdormException.Create('Singleton select returns more than 1 record');
+    finally
+      reader.Free;
+    end;
+  except
+    on e : Exception do begin
+      GetLogger.Error(e.Message, reader.SQL.Text);
+      raise;
+    end;
   end;
 end;
 
@@ -595,6 +652,7 @@ var
   SQL: string;
   reader: TFDQuery;
   CustomCriteria: ICustomCriteria;
+  ts :  TDatetime;
 begin
   if assigned(ACriteria) and TInterfacedObject(ACriteria).GetInterface(ICustomCriteria, CustomCriteria) then
     SQL := CustomCriteria.GetSQL
@@ -604,17 +662,26 @@ begin
   reader := FD.NewQuery;
   // if reader.Params.ParamCount <> 0 then
   // raise EdormException.Create('Parameters not replaced');
+  ts := Now;
   reader.SQL.Text := SQL;
-  reader.Open();
   try
-    while not reader.Eof do
-    begin
-      TdormUtils.MethodCall(AList, 'Add', [CreateObjectFromFireDACQuery(ARttiType, reader, AMappingTable)]);
-      reader.Next;
+    reader.Open();
+    GetLogger.LogCall(SQL, ts);
+    try
+      while not reader.Eof do
+      begin
+        TdormUtils.MethodCall(AList, 'Add', [CreateObjectFromFireDACQuery(ARttiType, reader, AMappingTable)]);
+        reader.Next;
+      end;
+      reader.Close;
+    finally
+      reader.Free;
     end;
-    reader.Close;
-  finally
-    reader.Free;
+  except
+    on e : Exception do begin
+      GetLogger.Error(e.Message, SQL);
+      raise;
+    end;
   end;
 end;
 
@@ -743,9 +810,19 @@ begin
 end;
 
 function TFireDACBaseAdapter.RawExecute(SQL: string): Int64;
+var ts : TDateTime;
 begin
   GetLogger.Warning('RAW EXECUTE: ' + SQL);
-  Result := FD.Execute(SQL);
+  ts := Now;
+  try
+    Result := FD.Execute(SQL);
+    GetLogger.LogCall(SQL, ts);
+  except
+    on e : Exception do begin
+      GetLogger.Error(e.Message, SQL);
+      raise;
+    end;
+  end;
 end;
 
 function TFireDACBaseAdapter.CreateObjectFromFireDACQuery(ARttiType: TRttiType; AReader: TFDQuery;
@@ -1025,13 +1102,23 @@ function TFireDACBaseAdapter.Load(ARttiType: TRttiType; AMappingTable: TMappingT
   AObject: TObject): boolean;
 var
   reader: TFDQuery;
+  ts : TDateTime;
 begin
   reader := GetFireDACReaderFor(ARttiType, AMappingTable, Value);
   try
-    reader.Open();
-    Result := not reader.Eof;
-    if Result then
-      LoadObjectFromFireDACReader(AObject, ARttiType, reader, AMappingTable.Fields);
+    ts := Now;
+    try
+      reader.Open();
+      GetLogger.LogCall(reader.SQL.Text, ts);
+      Result := not reader.Eof;
+      if Result then
+        LoadObjectFromFireDACReader(AObject, ARttiType, reader, AMappingTable.Fields);
+    except
+      on e : Exception do begin
+        GetLogger.Error(e.Message, reader.SQL.Text);
+        raise;
+      end;
+    end;
   finally
     reader.Free;
   end;

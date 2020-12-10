@@ -63,13 +63,14 @@ type
   public
     class procedure register;
     destructor Destroy; override;
-    procedure Error(const Value: string);
+    procedure Error(const Value: string; const _SQL : string = '');
     procedure Warning(const Value: string);
     procedure Info(const Value: string);
     procedure Debug(const Value: string);
     procedure AfterConstruction; override;
     procedure EnterLevel(const Value: string);
     procedure ExitLevel(const Value: string);
+    procedure LogCall(const SQL: string; StartTime : TDateTime);
     class property LogPath : string read FLogPath write SetLogPath;
   end;
 
@@ -126,7 +127,7 @@ begin
   IncIndent;
 end;
 
-procedure TdormFileLog.Error(const Value: string);
+procedure TdormFileLog.Error(const Value: string; const _SQL : string = '');
 begin
   Log('[ERROR] ' + Value);
 end;
@@ -180,6 +181,11 @@ procedure TdormFileLog.Log(const Value: string);
 begin
   FLoggerThread.Append(GetTimeStamp + '[' +
     inttostr(TThread.CurrentThread.ThreadID) + ']' + IndentToStr + Value);
+end;
+
+procedure TdormFileLog.LogCall(const SQL: string; StartTime : TDateTime);
+begin
+  //
 end;
 
 class procedure TdormFileLog.register;

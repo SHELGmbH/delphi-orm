@@ -177,6 +177,7 @@ begin
     FConnection := TFDPoolConnection.Create(nil);
     FConnection.FetchOptions.Mode := fmAll;
     FConnection.FetchOptions.Items := [fiBlobs,fiDetails];
+    FConnection.ResourceOptions.DirectExecute := true;
     SetConnectionParams;
     FCurrentTransaction := TFDTransaction.Create(nil);
     FCurrentTransaction.Connection := GetConnection;
