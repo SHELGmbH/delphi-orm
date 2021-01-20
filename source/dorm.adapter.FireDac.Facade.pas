@@ -26,7 +26,6 @@ uses
   System.Classes,
   Data.DB,
   FireDAC.UI.Intf,
-  FireDAC.VCLUI.Wait,
   FireDAC.Stan.Intf,
   FireDAC.Stan.Option,
   FireDAC.Stan.Error,
