@@ -539,18 +539,19 @@ begin
           targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
         end;
       end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
-        sourceCollection := TObjectList<TObject>(Src);
-        if Field.GetValue(cloned).IsEmpty then begin
-          targetCollection := TObjectList<TObject>(Field.ClassType.Create);
-          Field.SetValue(cloned, targetCollection);
-        end else begin
-          targetCollection := TObjectList<TObject>(Field.GetValue(cloned) .AsObject);
+        if assigned(Src) then begin
+          sourceCollection := TObjectList<TObject>(Src);
+          if Field.GetValue(cloned).IsEmpty then begin
+            targetCollection := TObjectList<TObject>(Field.ClassType.Create);
+            Field.SetValue(cloned, targetCollection);
+          end else begin
+            targetCollection := TObjectList<TObject>(Field.GetValue(cloned) .AsObject);
+          end;
+          for I := 0 to sourceCollection.Count - 1 do
+          begin
+            targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
+          end;
         end;
-        for I := 0 to sourceCollection.Count - 1 do
-        begin
-          targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
-        end;
-
       end else if assigned(src) and ((not assigned(DontCloneClasses)) or (DontCloneClasses.IndexOf(src.Classname) < 0)) then begin
         sourceObject := Src;
 
