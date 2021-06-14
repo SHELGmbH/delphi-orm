@@ -463,6 +463,7 @@ var
   attr: ListOf;
   _type_name: string;
   AChildType: TRttiType;
+  ctx: TRttiContext;
 begin
   isLazy := TdormUtils.HasAttribute<Lazy>(AProp);
   hasManyAttribute := TdormUtils.GetAttribute<HasMany>(AProp);
@@ -479,12 +480,17 @@ begin
     if Assigned(attr) then
     begin
       _type_name := attr.Value;
-      AChildType := TdormUtils.ctx.FindType(_type_name);
-      if not Assigned(AChildType) then
-        raise Exception.Create('Unknown type ' + _type_name + ' (ListOf ' +
-          attr.Value + ')');
-      relation.ChildClassName := _type_name;
-      // AChildType.AsInstance.MetaclassType.QualifiedClassName;
+      ctx:= TRttiContext.Create;
+      try
+        AChildType := ctx.FindType(_type_name);
+        if not Assigned(AChildType) then
+          raise Exception.Create('Unknown type ' + _type_name + ' (ListOf ' +
+            attr.Value + ')');
+        relation.ChildClassName := _type_name;
+        // AChildType.AsInstance.MetaclassType.QualifiedClassName;
+      finally
+        ctx.Free;
+      end;
     end
     else
       /// ////////////////////////////////////////////////////////////

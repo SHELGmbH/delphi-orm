@@ -835,114 +835,120 @@ var
   targetStream: TMemoryStream;
   f: TField;
   i: Integer;
+  ctx : TRttiContext;
 begin
+  ctx:= TRttiContext.Create;
   try
-    obj := TdormUtils.CreateObject(ARttiType);
-    for field in AMappingTable.Fields do
-    begin
-      if CompareText(field.FieldType, 'string') = 0 then
+    try
+      obj := TdormUtils.CreateObject(ARttiType);
+      for field in AMappingTable.Fields do
       begin
-        v := AReader.FieldByName(field.FieldName).AsString;
-        S := field.FieldName + ' as string';
-      end
-      else if CompareText(field.FieldType, 'integer') = 0 then
-      begin
-        v := AReader.FieldByName(field.FieldName).AsInteger;
-        S := field.FieldName + ' as integer';
-      end
-      else if CompareText(field.FieldType, 'int64') = 0 then
-      begin
-        v := AReader.FieldByName(field.FieldName).AsLargeInt;
-        S := field.FieldName + ' as int64';
-      end
-      else if CompareText(field.FieldType, 'date') = 0 then
-      begin
-        v := trunc(AReader.FieldByName(field.FieldName).AsDateTime);
-        S := field.FieldName + ' as date';
-      end
-      else if CompareText(field.FieldType, 'blob') = 0 then
-      begin
-        targetStream := nil;
-        if not AReader.FieldByName(field.FieldName).IsNull then
+        if CompareText(field.FieldType, 'string') = 0 then
         begin
-          targetStream := TStringStream.Create(AReader.FieldByName(field.FieldName).AsBytes);
-          // targetStream := TMemoryStream(AReader.CreateBlobStream(AReader.FieldByName(field.FieldName), bmRead));
-          targetStream.Position := 0;
-        end;
-        S := field.FieldName + ' as blob';
-        v := targetStream;
-      end
-      else if CompareText(field.FieldType, 'decimal') = 0 then
-      begin
-        v := AReader.FieldByName(field.FieldName).AsFloat;
-        S := field.FieldName + ' as decimal';
-      end
-      else if CompareText(field.FieldType, 'float') = 0 then
-      begin
-        v := AReader.FieldByName(field.FieldName).AsFloat;
-        S := field.FieldName + ' as float';
-      end
-      else if CompareText(field.FieldType, 'boolean') = 0 then
-      begin
-        f := AReader.FieldByName(field.FieldName);
-        if f.DataType = ftBoolean then
+          v := AReader.FieldByName(field.FieldName).AsString;
+          S := field.FieldName + ' as string';
+        end
+        else if CompareText(field.FieldType, 'integer') = 0 then
         begin
-          v := AReader.FieldByName(field.FieldName).AsBoolean
+          v := AReader.FieldByName(field.FieldName).AsInteger;
+          S := field.FieldName + ' as integer';
+        end
+        else if CompareText(field.FieldType, 'int64') = 0 then
+        begin
+          v := AReader.FieldByName(field.FieldName).AsLargeInt;
+          S := field.FieldName + ' as int64';
+        end
+        else if CompareText(field.FieldType, 'date') = 0 then
+        begin
+          v := trunc(AReader.FieldByName(field.FieldName).AsDateTime);
+          S := field.FieldName + ' as date';
+        end
+        else if CompareText(field.FieldType, 'blob') = 0 then
+        begin
+          targetStream := nil;
+          if not AReader.FieldByName(field.FieldName).IsNull then
+          begin
+            targetStream := TStringStream.Create(AReader.FieldByName(field.FieldName).AsBytes);
+            // targetStream := TMemoryStream(AReader.CreateBlobStream(AReader.FieldByName(field.FieldName), bmRead));
+            targetStream.Position := 0;
+          end;
+          S := field.FieldName + ' as blob';
+          v := targetStream;
+        end
+        else if CompareText(field.FieldType, 'decimal') = 0 then
+        begin
+          v := AReader.FieldByName(field.FieldName).AsFloat;
+          S := field.FieldName + ' as decimal';
+        end
+        else if CompareText(field.FieldType, 'float') = 0 then
+        begin
+          v := AReader.FieldByName(field.FieldName).AsFloat;
+          S := field.FieldName + ' as float';
+        end
+        else if CompareText(field.FieldType, 'boolean') = 0 then
+        begin
+          f := AReader.FieldByName(field.FieldName);
+          if f.DataType = ftBoolean then
+          begin
+            v := AReader.FieldByName(field.FieldName).AsBoolean
+          end
+          else
+          begin
+            v := AReader.FieldByName(field.FieldName).AsInteger <> 0;
+          end;
+          S := field.FieldName + ' as boolean';
+        end
+        else if CompareText(field.FieldType, 'datetime') = 0 then
+        begin
+          f := AReader.FieldByName(field.FieldName);
+          if f.IsNull then begin
+            Continue;
+          end else begin
+            v := f.AsDateTime;
+            S := field.FieldName + ' as datetime';
+          end;
+        end
+        else if CompareText(field.FieldType, 'time') = 0 then
+        begin
+          f := AReader.FieldByName(field.FieldName);
+          if f.IsNull then begin
+            Continue;
+          end else begin
+            v := AReader.FieldByName(field.FieldName).AsDateTime;
+            S := field.FieldName + ' as datetime';
+          end;
         end
         else
-        begin
-          v := AReader.FieldByName(field.FieldName).AsInteger <> 0;
-        end;
-        S := field.FieldName + ' as boolean';
-      end
-      else if CompareText(field.FieldType, 'datetime') = 0 then
-      begin
-        f := AReader.FieldByName(field.FieldName);
-        if f.IsNull then begin
-          Continue;
-        end else begin
-          v := f.AsDateTime;
-          S := field.FieldName + ' as datetime';
-        end;
-      end
-      else if CompareText(field.FieldType, 'time') = 0 then
-      begin
-        f := AReader.FieldByName(field.FieldName);
-        if f.IsNull then begin
-          Continue;
-        end else begin
-          v := AReader.FieldByName(field.FieldName).AsDateTime;
-          S := field.FieldName + ' as datetime';
-        end;
-      end
-      else
-        raise Exception.Create('Unknown field type for ' + field.FieldName);
-      try
-        TdormUtils.SetField(obj, field.name, v);
-      except
-        on E: Exception do
-        begin
-          raise EdormException.Create(E.Message + sLineBreak + '. Probably cannot write ' + ARttiType.ToString
-            + '.' + S);
+          raise Exception.Create('Unknown field type for ' + field.FieldName);
+        try
+          TdormUtils.SetField(obj, field.name, v);
+        except
+          on E: Exception do
+          begin
+            raise EdormException.Create(E.Message + sLineBreak + '. Probably cannot write ' + ARttiType.ToString
+              + '.' + S);
+          end;
         end;
       end;
-    end;
-    for i := 0 to AMappingTable.JoinTableList.Count - 1 do begin
-      v := TdormUtils.GetProperty(obj, AMappingTable.JoinTableList[i].PropName);
-      if v.IsObject and assigned (AMappingTable.JoinTableList[i].MappingTable) then begin
-        subobj := v.AsObject;
-        if assigned(subobj) then begin
-          LoadObjectFromFireDACReader(subobj, TdormUtils.ctx.GetType(Obj.ClassType), AReader, AMappingTable.JoinTableList[i].MappingTable.Fields, AMappingTable.JoinTableList[i].Qualifier);
+      for i := 0 to AMappingTable.JoinTableList.Count - 1 do begin
+        v := TdormUtils.GetProperty(obj, AMappingTable.JoinTableList[i].PropName);
+        if v.IsObject and assigned (AMappingTable.JoinTableList[i].MappingTable) then begin
+          subobj := v.AsObject;
+          if assigned(subobj) then begin
+            LoadObjectFromFireDACReader(subobj, ctx.GetType(Obj.ClassType), AReader, AMappingTable.JoinTableList[i].MappingTable.Fields, AMappingTable.JoinTableList[i].Qualifier);
+          end;
         end;
       end;
+    except
+      on E: Exception do
+      begin
+        raise;
+      end;
     end;
-  except
-    on E: Exception do
-    begin
-      raise;
-    end;
+    Result := obj;
+  finally
+    ctx.Free;
   end;
-  Result := obj;
 end;
 
 class procedure TFireDACBaseAdapter.register;

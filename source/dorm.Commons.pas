@@ -434,33 +434,39 @@ begin
 end;
 
 constructor TDuckTypedList.Create(AObjectAsDuck: TObject; AOwnsObject: boolean);
+var ctx: TRttiContext;
 begin
   inherited Create;
   FOwnsObject := AOwnsObject;
   FObjectAsDuck := AObjectAsDuck;
-  FAddMethod := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('Add');
-  if not Assigned(FAddMethod) then
-    raise EdormException.Create('Cannot find method "Add" in the duck object');
-  FClearMethod := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('Clear');
-  if not Assigned(FClearMethod) then
-    raise EdormException.Create('Cannot find method "Clear" in the duck object');
-  FGetItemMethod := nil;
+  ctx:= TRttiContext.Create;
+  try
+    FAddMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('Add');
+    if not Assigned(FAddMethod) then
+      raise EdormException.Create('Cannot find method "Add" in the duck object');
+    FClearMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('Clear');
+    if not Assigned(FClearMethod) then
+      raise EdormException.Create('Cannot find method "Clear" in the duck object');
+    FGetItemMethod := nil;
 
-{$IF CompilerVersion >= 23}
-  FGetItemMethod := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetIndexedProperty('Items')
-    .ReadMethod;
+  {$IF CompilerVersion >= 23}
+    FGetItemMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetIndexedProperty('Items')
+      .ReadMethod;
 
-{$IFEND}
-  if not Assigned(FGetItemMethod) then
-    FGetItemMethod := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('GetItem');
-  if not Assigned(FGetItemMethod) then
-    FGetItemMethod := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('GetElement');
-  if not Assigned(FGetItemMethod) then
-    raise EdormException.Create
-      ('Cannot find method Indexed property "Items" or method "GetItem" or method "GetElement" in the duck object');
-  FCountProperty := TdormUtils.ctx.GetType(AObjectAsDuck.ClassInfo).GetProperty('Count');
-  if not Assigned(FCountProperty) then
-    raise EdormException.Create('Cannot find property "Count" in the duck object');
+  {$IFEND}
+    if not Assigned(FGetItemMethod) then
+      FGetItemMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('GetItem');
+    if not Assigned(FGetItemMethod) then
+      FGetItemMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('GetElement');
+    if not Assigned(FGetItemMethod) then
+      raise EdormException.Create
+        ('Cannot find method Indexed property "Items" or method "GetItem" or method "GetElement" in the duck object');
+    FCountProperty := ctx.GetType(AObjectAsDuck.ClassInfo).GetProperty('Count');
+    if not Assigned(FCountProperty) then
+      raise EdormException.Create('Cannot find property "Count" in the duck object');
+  finally
+    ctx.Free;
+  end;
 end;
 
 destructor TDuckTypedList.Destroy;
@@ -634,10 +640,16 @@ begin
 end;
 
 procedure TDuckTypedObject.InitializeDuckedInterface;
+var ctx : TRttiContext;
 begin
-  _type := TdormUtils.ctx.GetType(FLastWrapperClassType);
-  BindValidatingMethods(_type);
-  BindEventsMethods(_type);
+  ctx:= TRttiContext.Create;
+  try
+    _type := ctx.GetType(FLastWrapperClassType);
+    BindValidatingMethods(_type);
+    BindEventsMethods(_type);
+  finally
+    ctx.Free;
+  end;
 end;
 
 procedure TDuckTypedObject.InsertValidate;

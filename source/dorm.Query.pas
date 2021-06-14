@@ -253,6 +253,7 @@ end;
 
 constructor TFrom.Create(AObject: TClass; ASQLable: ISQLable;
   AScope: TDictionary<string, TRttiType>);
+var  ctx : TRttiContext;
 begin
   inherited Create;
   mType := AObject;
@@ -260,7 +261,12 @@ begin
   mJoins := TObjectList<TJoin>.Create(true);
   mQueryBase := ASQLable;
   mArguments := TObjectList<TdormParameter>.Create(true);
-  FScope.Add(mType.ClassName, TdormUtils.ctx.GetType(mType));
+  ctx:= TRttiContext.Create;
+  try
+    FScope.Add(mType.ClassName, ctx.GetType(mType));
+  finally
+    ctx.Free;
+  end;
 end;
 
 function TFrom.ToSQL(AMappingStrategy: ICacheMappingStrategy;
@@ -402,13 +408,19 @@ function TFrom.GetTableName(AMappingStrategy: ICacheMappingStrategy;
   AClassObject: TClass): string;
 var
   m: TMappingTable;
+  ctx: TRttiContext;
 begin
-  m := AMappingStrategy.GetMapping(TdormUtils.ctx.GetType
-    (AClassObject));
-  if not assigned(m) then
-    raise EdormException.Create('Cannot find mapping for ' +
-      AClassObject.QualifiedClassName);
-  Result := m.TableName;
+  ctx:= TRttiContext.Create;
+  try
+    m := AMappingStrategy.GetMapping(ctx.GetType
+      (AClassObject));
+    if not assigned(m) then
+      raise EdormException.Create('Cannot find mapping for ' +
+        AClassObject.QualifiedClassName);
+    Result := m.TableName;
+  finally
+    ctx.Free;
+  end;
 end;
 
 function TFrom.groupBy(AGroupBy: string): TFrom;

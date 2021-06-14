@@ -29,7 +29,6 @@ type
   private
     class var DontCloneClasses : TStringList;
   public
-    class var ctx: TRttiContext;
   public
     class function MethodCall(AObject: TObject; AMethodName: string;
       AParameters: array of TValue): TValue;
@@ -79,13 +78,19 @@ class function TdormUtils.MethodCall(AObject: TObject; AMethodName: string;
   AParameters: array of TValue): TValue;
 var
   m: TRttiMethod;
+  ctx: TRttiContext;
 begin
-  m := ctx.GetType(AObject.ClassInfo).GetMethod(AMethodName);
-  if Assigned(m) then
-    Result := m.Invoke(AObject, AParameters)
-  else
-    raise Exception.CreateFmt('Cannot find method "%s" in the object',
-      [AMethodName]);
+  ctx := TRttiContext.Create;
+  try
+    m := ctx.GetType(AObject.ClassInfo).GetMethod(AMethodName);
+    if Assigned(m) then
+      Result := m.Invoke(AObject, AParameters)
+    else
+      raise Exception.CreateFmt('Cannot find method "%s" in the object',
+        [AMethodName]);
+  finally
+    ctx.Free;
+  end;
 end;
 
 function FieldFor(const PropertyName: string): string; inline;
@@ -136,21 +141,27 @@ var
   Field: TRttiField;
   Prop: TRttiProperty;
   ARttiType: TRttiType;
+  ctx: TRttiContext;
 begin
-  ARttiType := ctx.GetType(Obj.ClassType);
-  if not Assigned(ARttiType) then
-    raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
-      [ARttiType.ToString]);
-  Field := ARttiType.GetField(FieldFor(PropertyName));
-  if Assigned(Field) then
-    Result := Field.GetValue(Obj)
-  else
-  begin
-    Prop := ARttiType.GetProperty(PropertyName);
-    if not Assigned(Prop) then
-      raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
-        [ARttiType.ToString, PropertyName]);
-    Result := Prop.GetValue(Obj);
+  ctx:= TRttiContext.Create;
+  try
+    ARttiType := ctx.GetType(Obj.ClassType);
+    if not Assigned(ARttiType) then
+      raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
+        [ARttiType.ToString]);
+    Field := ARttiType.GetField(FieldFor(PropertyName));
+    if Assigned(Field) then
+      Result := Field.GetValue(Obj)
+    else
+    begin
+      Prop := ARttiType.GetProperty(PropertyName);
+      if not Assigned(Prop) then
+        raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
+          [ARttiType.ToString, PropertyName]);
+      Result := Prop.GetValue(Obj);
+    end;
+  finally
+    ctx.Free;
   end;
 end;
 
@@ -159,20 +170,26 @@ class function TdormUtils.GetProperty(Obj: TObject;
 var
   Prop: TRttiProperty;
   ARttiType: TRttiType;
+  ctx: TRttiContext;
 begin
-  ARttiType := ctx.GetType(Obj.ClassType);
-  if not Assigned(ARttiType) then
-    raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
-      [ARttiType.ToString]);
-  Prop := ARttiType.GetProperty(PropertyName);
-  if not Assigned(Prop) then
-    raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
-      [ARttiType.ToString, PropertyName]);
-  if Prop.IsReadable then
-    Result := Prop.GetValue(Obj)
-  else
-    raise Exception.CreateFmt('Property is not readable [%s.%s]',
-      [ARttiType.ToString, PropertyName]);
+  ctx:= TRttiContext.Create;
+  try
+    ARttiType := ctx.GetType(Obj.ClassType);
+    if not Assigned(ARttiType) then
+      raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
+        [ARttiType.ToString]);
+    Prop := ARttiType.GetProperty(PropertyName);
+    if not Assigned(Prop) then
+      raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
+        [ARttiType.ToString, PropertyName]);
+    if Prop.IsReadable then
+      Result := Prop.GetValue(Obj)
+    else
+      raise Exception.CreateFmt('Property is not readable [%s.%s]',
+        [ARttiType.ToString, PropertyName]);
+  finally
+    ctx.Free;
+  end;
 end;
 
 class function TdormUtils.HasAttribute<T>(const Obj: TRttiObject): Boolean;
@@ -186,32 +203,38 @@ var
   Field: TRttiField;
   Prop: TRttiProperty;
   ARttiType: TRttiType;
+  ctx: TRttiContext;
 begin
-  ARttiType := ctx.GetType(Obj.ClassType);
-  if not Assigned(ARttiType) then
-    raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
-      [ARttiType.ToString]);
-  Field := ARttiType.GetField(FieldFor(PropertyName));
-  if Assigned(Field) then
-  begin
-	{***** Daniele Spinetti *****}
-	// if the object is not empty, we need to free it ( otherwise memory leak ). 
-    if (Field.GetValue(Obj).IsObject) and (not(Field.GetValue(Obj).IsEmpty))
-    then
-      Field.GetValue(Obj).AsObject.Free;
-    Field.SetValue(Obj, Value);
-  end
-  else
-  begin
-    Prop := ARttiType.GetProperty(PropertyName);
-    if Assigned(Prop) then
+  ctx:= TRttiContext.Create;
+  try
+    ARttiType := ctx.GetType(Obj.ClassType);
+    if not Assigned(ARttiType) then
+      raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
+        [ARttiType.ToString]);
+    Field := ARttiType.GetField(FieldFor(PropertyName));
+    if Assigned(Field) then
     begin
-      if Prop.IsWritable then
-        Prop.SetValue(Obj, Value)
+    {***** Daniele Spinetti *****}
+    // if the object is not empty, we need to free it ( otherwise memory leak ).
+      if (Field.GetValue(Obj).IsObject) and (not(Field.GetValue(Obj).IsEmpty))
+      then
+        Field.GetValue(Obj).AsObject.Free;
+      Field.SetValue(Obj, Value);
     end
     else
-      raise Exception.CreateFmt('Cannot get RTTI for field or property [%s.%s]',
-        [ARttiType.ToString, PropertyName]);
+    begin
+      Prop := ARttiType.GetProperty(PropertyName);
+      if Assigned(Prop) then
+      begin
+        if Prop.IsWritable then
+          Prop.SetValue(Obj, Value)
+      end
+      else
+        raise Exception.CreateFmt('Cannot get RTTI for field or property [%s.%s]',
+          [ARttiType.ToString, PropertyName]);
+    end;
+  finally
+    ctx.Free;
   end;
 end;
 
@@ -234,20 +257,26 @@ class procedure TdormUtils.SetProperty(Obj: TObject; const PropertyName: string;
 var
   Prop: TRttiProperty;
   ARttiType: TRttiType;
+  ctx: TRttiContext;
 begin
-  ARttiType := ctx.GetType(Obj.ClassType);
-  if not Assigned(ARttiType) then
-    raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
-      [ARttiType.ToString]);
-  Prop := ARttiType.GetProperty(PropertyName);
-  if not Assigned(Prop) then
-    raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
-      [ARttiType.ToString, PropertyName]);
-  if Prop.IsWritable then
-    Prop.SetValue(Obj, Value)
-  else
-    raise Exception.CreateFmt('Property is not writeable [%s.%s]',
-      [ARttiType.ToString, PropertyName]);
+  ctx:= TRttiContext.Create;
+  try
+    ARttiType := ctx.GetType(Obj.ClassType);
+    if not Assigned(ARttiType) then
+      raise Exception.CreateFmt('Cannot get RTTI for type [%s]',
+        [ARttiType.ToString]);
+    Prop := ARttiType.GetProperty(PropertyName);
+    if not Assigned(Prop) then
+      raise Exception.CreateFmt('Cannot get RTTI for property [%s.%s]',
+        [ARttiType.ToString, PropertyName]);
+    if Prop.IsWritable then
+      Prop.SetValue(Obj, Value)
+    else
+      raise Exception.CreateFmt('Property is not writeable [%s.%s]',
+        [ARttiType.ToString, PropertyName]);
+  finally
+    ctx.Free;
+  end;
 end;
 
 class procedure TdormUtils.SetProperty(Obj: TObject;
@@ -305,22 +334,27 @@ class function TdormUtils.GetPropertyDef(Obj: TObject;
 var
   Prop: TRttiProperty;
   ARttiType: TRttiType;
+  ctx: TRttiContext;
 begin
-  Result := nil;
-  ARttiType := ctx.GetType(Obj.ClassType);
-  if Assigned(ARttiType) then begin
-    Prop := ARttiType.GetProperty(PropertyName);
-    if Assigned(Prop) then begin
-      if _RequiresRW then begin
-        if Prop.IsReadable and prop.IsWritable then begin
+  ctx:= TRttiContext.Create;
+  try
+    Result := nil;
+    ARttiType := ctx.GetType(Obj.ClassType);
+    if Assigned(ARttiType) then begin
+      Prop := ARttiType.GetProperty(PropertyName);
+      if Assigned(Prop) then begin
+        if _RequiresRW then begin
+          if Prop.IsReadable and prop.IsWritable then begin
+            Result := Prop;
+          end;
+        end else begin
           Result := Prop;
         end;
-      end else begin
-        Result := Prop;
       end;
     end;
+  finally
+    ctx.Free;
   end;
-
 end;
 
 class procedure TdormUtils.ObjectToDataSet(Obj: TObject; Field: TField;
@@ -335,21 +369,27 @@ var
   props: TArray<TRttiProperty>;
   Prop: TRttiProperty;
   f: TField;
+  ctx: TRttiContext;
 begin
-  ARttiType := ctx.GetType(Obj.ClassType);
-  props := ARttiType.GetProperties;
-  for Prop in props do
-    if not SameText(Prop.Name, 'ID') then
-    begin
-      f := Dataset.FindField(Prop.Name);
-      if Assigned(f) and not f.ReadOnly then
+  ctx:= TRttiContext.Create;
+  try
+    ARttiType := ctx.GetType(Obj.ClassType);
+    props := ARttiType.GetProperties;
+    for Prop in props do
+      if not SameText(Prop.Name, 'ID') then
       begin
-        if f is TIntegerField then
-          SetProperty(Obj, Prop.Name, TIntegerField(f).Value)
-        else
-          SetProperty(Obj, Prop.Name, TValue.From<Variant>(f.Value))
+        f := Dataset.FindField(Prop.Name);
+        if Assigned(f) and not f.ReadOnly then
+        begin
+          if f is TIntegerField then
+            SetProperty(Obj, Prop.Name, TIntegerField(f).Value)
+          else
+            SetProperty(Obj, Prop.Name, TValue.From<Variant>(f.Value))
+        end;
       end;
-    end;
+  finally
+    ctx.Free;
+  end;
 end;
 
 class destructor TdormUtils.Destroy;
@@ -377,69 +417,74 @@ var
   I: Integer;
   sourceObject: TObject;
   targetObject: TObject;
+  ctx: TRttiContext;
 begin
   if not assigned(SourceObj) or not Assigned(TargetObj) then
     Exit;
-
-  _ARttiType := ctx.GetType(SourceObj.ClassType);
-  cloned := TargetObj;
-  master := SourceObj;
-  for Field in _ARttiType.GetFields do
-  begin
-    if not Field.FieldType.IsInstance then
-      Field.SetValue(cloned, Field.GetValue(master))
-    else
+  ctx:= TRttiContext.Create;
+  try
+    _ARttiType := ctx.GetType(SourceObj.ClassType);
+    cloned := TargetObj;
+    master := SourceObj;
+    for Field in _ARttiType.GetFields do
     begin
-      Src := Field.GetValue(SourceObj).AsObject;
-      if Src is TStream then
-      begin
-        sourceStream := TStream(Src);
-        SavedPosition := sourceStream.Position;
-        sourceStream.Position := 0;
-        if Field.GetValue(cloned).IsEmpty then
-        begin
-          targetStream := TMemoryStream.Create;
-          Field.SetValue(cloned, targetStream);
-        end
-        else
-          targetStream := Field.GetValue(cloned).AsObject as TStream;
-        targetStream.Position := 0;
-        targetStream.CopyFrom(sourceStream, sourceStream.Size);
-        targetStream.Position := SavedPosition;
-        sourceStream.Position := SavedPosition;
-      end
-      else if Src is TObjectList<TObject> then
-      begin
-        sourceCollection := TObjectList<TObject>(Src);
-        if Field.GetValue(cloned).IsEmpty then
-        begin
-          targetCollection := TObjectList<TObject>.Create;
-          Field.SetValue(cloned, targetCollection);
-        end
-        else
-          targetCollection := Field.GetValue(cloned)
-            .AsObject as TObjectList<TObject>;
-        for I := 0 to sourceCollection.Count - 1 do
-        begin
-          targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
-        end;
-      end
+      if not Field.FieldType.IsInstance then
+        Field.SetValue(cloned, Field.GetValue(master))
       else
       begin
-        sourceObject := Src;
-
-        if Field.GetValue(cloned).IsEmpty then
+        Src := Field.GetValue(SourceObj).AsObject;
+        if Src is TStream then
         begin
-          targetObject := TdormUtils.Clone(sourceObject);
-          Field.SetValue(cloned, targetObject);
+          sourceStream := TStream(Src);
+          SavedPosition := sourceStream.Position;
+          sourceStream.Position := 0;
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetStream := TMemoryStream.Create;
+            Field.SetValue(cloned, targetStream);
+          end
+          else
+            targetStream := Field.GetValue(cloned).AsObject as TStream;
+          targetStream.Position := 0;
+          targetStream.CopyFrom(sourceStream, sourceStream.Size);
+          targetStream.Position := SavedPosition;
+          sourceStream.Position := SavedPosition;
+        end
+        else if Src is TObjectList<TObject> then
+        begin
+          sourceCollection := TObjectList<TObject>(Src);
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetCollection := TObjectList<TObject>.Create;
+            Field.SetValue(cloned, targetCollection);
+          end
+          else
+            targetCollection := Field.GetValue(cloned)
+              .AsObject as TObjectList<TObject>;
+          for I := 0 to sourceCollection.Count - 1 do
+          begin
+            targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
+          end;
         end
         else
         begin
-          targetObject := Field.GetValue(cloned).AsObject;
-          TdormUtils.CopyObject(sourceObject, targetObject);
+          sourceObject := Src;
+
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetObject := TdormUtils.Clone(sourceObject);
+            Field.SetValue(cloned, targetObject);
+          end
+          else
+          begin
+            targetObject := Field.GetValue(cloned).AsObject;
+            TdormUtils.CopyObject(sourceObject, targetObject);
+          end;
         end;
       end;
     end;
+  finally
+    ctx.Free;
   end;
 end;
 
@@ -491,86 +536,91 @@ var
   I: Integer;
   sourceObject: TObject;
   targetObject: TObject;
+  ctx: TRttiContext;
 begin
   Result := nil;
   if not Assigned(Obj) then
     Exit;
-
-  _ARttiType := ctx.GetType(Obj.ClassType);
-  cloned := CreateObject(_ARttiType);
-  master := Obj;
-  for Field in _ARttiType.GetFields do
-  begin
-    if not Field.FieldType.IsInstance then
-      Field.SetValue(cloned, Field.GetValue(master))
-    else
+  ctx:= TRttiContext.Create;
+  try
+    _ARttiType := ctx.GetType(Obj.ClassType);
+    cloned := CreateObject(_ARttiType);
+    master := Obj;
+    for Field in _ARttiType.GetFields do
     begin
-      Src := Field.GetValue(Obj).AsObject;
-      if Src is TStream then
+      if not Field.FieldType.IsInstance then
+        Field.SetValue(cloned, Field.GetValue(master))
+      else
       begin
-        sourceStream := TStream(Src);
-        SavedPosition := sourceStream.Position;
-        sourceStream.Position := 0;
-        if Field.GetValue(cloned).IsEmpty then
+        Src := Field.GetValue(Obj).AsObject;
+        if Src is TStream then
         begin
-          targetStream := TMemoryStream.Create;
-          Field.SetValue(cloned, targetStream);
+          sourceStream := TStream(Src);
+          SavedPosition := sourceStream.Position;
+          sourceStream.Position := 0;
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetStream := TMemoryStream.Create;
+            Field.SetValue(cloned, targetStream);
+          end
+          else
+            targetStream := Field.GetValue(cloned).AsObject as TStream;
+          targetStream.Position := 0;
+          targetStream.CopyFrom(sourceStream, sourceStream.Size);
+          targetStream.Position := SavedPosition;
+          sourceStream.Position := SavedPosition;
         end
-        else
-          targetStream := Field.GetValue(cloned).AsObject as TStream;
-        targetStream.Position := 0;
-        targetStream.CopyFrom(sourceStream, sourceStream.Size);
-        targetStream.Position := SavedPosition;
-        sourceStream.Position := SavedPosition;
-      end
-      else if Src is TObjectList<TObject> then
-      begin
-        sourceCollection := TObjectList<TObject>(Src);
-        if Field.GetValue(cloned).IsEmpty then
+        else if Src is TObjectList<TObject> then
         begin
-          targetCollection := TObjectList<TObject>.Create;
-          Field.SetValue(cloned, targetCollection);
-        end
-        else
-          targetCollection := Field.GetValue(cloned)
-            .AsObject as TObjectList<TObject>;
-        for I := 0 to sourceCollection.Count - 1 do
-        begin
-          targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
-        end;
-      end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
-        if assigned(Src) then begin
           sourceCollection := TObjectList<TObject>(Src);
-          if Field.GetValue(cloned).IsEmpty then begin
-            targetCollection := TObjectList<TObject>(Field.ClassType.Create);
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetCollection := TObjectList<TObject>.Create;
             Field.SetValue(cloned, targetCollection);
-          end else begin
-            targetCollection := TObjectList<TObject>(Field.GetValue(cloned) .AsObject);
-          end;
+          end
+          else
+            targetCollection := Field.GetValue(cloned)
+              .AsObject as TObjectList<TObject>;
           for I := 0 to sourceCollection.Count - 1 do
           begin
             targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
           end;
-        end;
-      end else if assigned(src) and ((not assigned(DontCloneClasses)) or (DontCloneClasses.IndexOf(src.Classname) < 0)) then begin
-        sourceObject := Src;
+        end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
+          if assigned(Src) then begin
+            sourceCollection := TObjectList<TObject>(Src);
+            if Field.GetValue(cloned).IsEmpty then begin
+              targetCollection := TObjectList<TObject>(Field.ClassType.Create);
+              Field.SetValue(cloned, targetCollection);
+            end else begin
+              targetCollection := TObjectList<TObject>(Field.GetValue(cloned) .AsObject);
+            end;
+            for I := 0 to sourceCollection.Count - 1 do
+            begin
+              targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
+            end;
+          end;
+        end else if assigned(src) and ((not assigned(DontCloneClasses)) or (DontCloneClasses.IndexOf(src.Classname) < 0)) then begin
+          sourceObject := Src;
 
-        if Field.GetValue(cloned).IsEmpty then
-        begin
-          targetObject := TdormUtils.Clone(sourceObject);
+          if Field.GetValue(cloned).IsEmpty then
+          begin
+            targetObject := TdormUtils.Clone(sourceObject);
+            Field.SetValue(cloned, targetObject);
+          end
+          else
+          begin
+            targetObject := Field.GetValue(cloned).AsObject;
+            TdormUtils.CopyObject(sourceObject, targetObject);
+          end;
           Field.SetValue(cloned, targetObject);
-        end
-        else
-        begin
-          targetObject := Field.GetValue(cloned).AsObject;
-          TdormUtils.CopyObject(sourceObject, targetObject);
         end;
-        Field.SetValue(cloned, targetObject);
       end;
-    end;
 
+    end;
+    Result := cloned;
+  finally
+    ctx.Free;
   end;
-  Result := cloned;
 end;
 
 { TListDuckTyping }
