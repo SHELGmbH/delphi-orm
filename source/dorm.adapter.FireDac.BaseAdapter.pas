@@ -660,28 +660,27 @@ begin
     SQL := self.GetSelectSQL(ACriteria, AMappingTable);
   GetLogger.Debug('EXECUTING: ' + SQL);
   reader := FD.NewQuery;
-  // if reader.Params.ParamCount <> 0 then
-  // raise EdormException.Create('Parameters not replaced');
-  ts := Now;
-  reader.SQL.Text := SQL;
   try
-    reader.Open();
-    GetLogger.LogCall(SQL, ts);
+    // if reader.Params.ParamCount <> 0 then
+    // raise EdormException.Create('Parameters not replaced');
+    ts := Now;
+    reader.SQL.Text := SQL;
     try
-      while not reader.Eof do
-      begin
+      reader.Open();
+      GetLogger.LogCall(SQL, ts);
+      while not reader.Eof do begin
         TdormUtils.MethodCall(AList, 'Add', [CreateObjectFromFireDACQuery(ARttiType, reader, AMappingTable)]);
         reader.Next;
       end;
       reader.Close;
-    finally
-      reader.Free;
+    except
+      on e : Exception do begin
+        GetLogger.Error(e.Message, SQL);
+        raise;
+      end;
     end;
-  except
-    on e : Exception do begin
-      GetLogger.Error(e.Message, SQL);
-      raise;
-    end;
+  finally
+    reader.Free;
   end;
 end;
 
