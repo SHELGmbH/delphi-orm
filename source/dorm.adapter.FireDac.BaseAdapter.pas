@@ -635,14 +635,14 @@ begin
       if not reader.Eof and not DontRaiseExceptionOnUnexpectedMultiRowResult then
         // there is some problem.... here I should have only one record
         raise EdormException.Create('Singleton select returns more than 1 record');
-    finally
-      reader.Free;
+    except
+      on e : Exception do begin
+        GetLogger.Error(e.Message, reader.SQL.Text);
+        raise;
+      end;
     end;
-  except
-    on e : Exception do begin
-      GetLogger.Error(e.Message, reader.SQL.Text);
-      raise;
-    end;
+  finally
+    reader.Free;
   end;
 end;
 

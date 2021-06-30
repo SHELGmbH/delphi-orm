@@ -1318,14 +1318,24 @@ function TSession.LoadList<T>(Criteria: ICriteria):
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
 begin
   Result := {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND}.Create(true);
-  LoadList<T>(Criteria, Result);
+  try
+    LoadList<T>(Criteria, Result);
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
 end;
 
 function TSession.LoadListSQL<T>(ASQLable: ISQLable):
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
 begin
   Result := {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND}.Create(true);
-  FillListSQL<T>(Result, ASQLable);
+  try
+    FillListSQL<T>(Result, ASQLable);
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
 end;
 
 procedure TSession.LoadList<T>(Criteria: ICriteria; AObject: TObject);
