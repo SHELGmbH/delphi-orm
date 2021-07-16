@@ -74,8 +74,6 @@ type
     FOnBeforeConfigureStrategy: TdormStrategyConfigEvent;
     class var FDontRaiseExceptionOnUnexpectedMultiRowResult: boolean;
     class var FUnicodeDB: Boolean;
-    procedure LoadEnter;
-    procedure LoadExit;
     procedure ReadIDConfig(const AJsonPersistenceConfig: ISuperObject);
     /// this method load an object using a value and a specific mapping field. is used to load the
     // relations between objects
@@ -150,16 +148,6 @@ type
     // : TObject; overload; deprecated;
     function IsNullKey(ATableMap: TMappingTable; const AValue: TValue): boolean;
     ///
-    procedure AddAsLoadedObject(AObject: TObject;
-      AMappingField: TMappingField); overload;
-    procedure AddAsLoadedObject(ACollection: IWrappedList;
-      AMappingField: TMappingField); overload;
-    function IsAlreadyLoaded(ATypeInfo: PTypeInfo; AValue: TValue;
-      out AOutObject: TObject): boolean;
-    function GetLoadedObjectHashCode(AObject: TObject;
-      AMappingField: TMappingField): string; overload;
-    function GetLoadedObjectHashCode(ATypeInfo: PTypeInfo; AValue: TValue)
-      : string; overload;
     procedure InternalUpdate(AObject: TObject; AValidaetable: TdormValidateable;
       AOnlyChild: boolean = false);
     function InternalInsert(AObject: TObject;
@@ -334,24 +322,6 @@ uses
   dorm.Adapters,
   dorm.Utils, System.StrUtils;
 { TSession }
-
-procedure TSession.AddAsLoadedObject(AObject: TObject;
-  AMappingField: TMappingField);
-var
-  o: TObject;
-begin
-  if not IsAlreadyLoaded(AObject.ClassInfo, GetIdValue(AMappingField, AObject), o) then
-    LoadedObjects.Add(GetLoadedObjectHashCode(AObject, AMappingField), AObject);
-end;
-
-procedure TSession.AddAsLoadedObject(ACollection: IWrappedList;
-  AMappingField: TMappingField);
-var
-  Obj: TObject;
-begin
-  for Obj in ACollection do
-    AddAsLoadedObject(Obj, AMappingField);
-end;
 
 procedure TSession.ApplyBackupObject(_Obj: TObject);
 var prop : TRttiProperty;
@@ -772,23 +742,6 @@ begin
   FillList(_type_info, ACollection, ACriteria);
 end;
 
-function TSession.GetLoadedObjectHashCode(AObject: TObject;
-  AMappingField: TMappingField): string;
-begin
-  Result := GetLoadedObjectHashCode(AObject.ClassType.ClassInfo, GetIdValue(AMappingField, AObject));
-end;
-
-function TSession.GetLoadedObjectHashCode(ATypeInfo: PTypeInfo;
-  AValue: TValue): string;
-begin
-  Result := string(ATypeInfo.Name) + '_';
-  if AValue.IsOrdinal then begin
-     Result := Result + inttostr(AValue.AsInt64);
-  end else begin
-     Result := Result + AValue.AsString;
-  end;
-end;
-
 function TSession.GetLogger: IdormLogger;
 begin
   Result := FLogger;
@@ -954,42 +907,35 @@ var
   Obj: TObject;
   _validable: TdormValidateable;
 begin
-  LoadEnter;
   rt := FCTX.GetType(ATypeInfo);
   GetLogger.EnterLevel('Load ' + rt.ToString);
   _table := FMappingStrategy.GetMapping(rt);
-  if not IsAlreadyLoaded(ATypeInfo, Value, Result) then { todo: optimize... please }
-  begin
-    Obj := TdormUtils.CreateObject(rt);
-    try
-      if FPersistStrategy.Load(rt, _table, AMappingField, Value, Obj, DontRaiseExceptionOnUnexpectedMultiRowResult) then
-      begin
-        Result := Obj;
-        AddAsLoadedObject(Result, _table.Id);
-        // mark this object as already loaded
-      end
-      else
-      begin
-        Obj.Free;
-        Result := nil;
-      end;
-    except
-      Obj.Free;
-      raise;
-    end;
-
-    if assigned(Result) then
+  Obj := TdormUtils.CreateObject(rt);
+  try
+    if FPersistStrategy.Load(rt, _table, AMappingField, Value, Obj, DontRaiseExceptionOnUnexpectedMultiRowResult) then
     begin
-      LoadBelongsToRelation(_table, Value, rt, Result);
-      LoadHasManyRelation(_table, Value, rt, Result);
-      LoadHasOneRelation(_table, Value, rt, Result);
-
-      _validable := WrapAsValidateableObject(Result, FValidatingDuck);
-      _validable.OnAfterLoad;
-      ApplyBackupObject(Result);
+      Result := Obj;
+    end
+    else
+    begin
+      Obj.Free;
+      Result := nil;
     end;
+  except
+    Obj.Free;
+    raise;
   end;
-  LoadExit;
+
+  if assigned(Result) then
+  begin
+    LoadBelongsToRelation(_table, Value, rt, Result);
+    LoadHasManyRelation(_table, Value, rt, Result);
+    LoadHasOneRelation(_table, Value, rt, Result);
+
+    _validable := WrapAsValidateableObject(Result, FValidatingDuck);
+    _validable.OnAfterLoad;
+    ApplyBackupObject(Result);
+  end;
   GetLogger.ExitLevel('Load ' + rt.ToString);
 end;
 
@@ -1028,7 +974,6 @@ var
   _idValue: TValue;
   _validateable: TdormValidateable;
 begin
-  LoadEnter;
   rt := FCTX.GetType(ATypeInfo);
   GetLogger.EnterLevel('Load ' + rt.ToString);
   _table := FMappingStrategy.GetMapping(rt);
@@ -1048,7 +993,6 @@ begin
   end;
 
   GetLogger.ExitLevel('Load ' + rt.ToString);
-  LoadExit;
 end;
 
 function TSession.Load(AClassType: TClass; Criteria: ICriteria; out AObject: TObject): boolean;
@@ -1143,7 +1087,6 @@ begin
       GetStrategy.LoadList(Coll, _child_type, ChildTable, Criteria);
       { todo: callafterloadevent }
       List := WrapAsList(Coll);
-      AddAsLoadedObject(list, ChildTable.Id);
       SetObjectsStatus(list, osClean, ChildTable, false);
       LoadRelationsForEachElement(Coll);
     end
@@ -1198,7 +1141,7 @@ var
   _table: TMappingTable;
   _has_one: TMappingRelation;
   _child_type: TRttiType;
-  DestObj, Obj: TObject;
+  DestObj: TObject;
 begin
   GetLogger.Debug('Loading HAS_ONE for ' + AClassName + '.' + APropertyName);
   _table := FMappingStrategy.GetMapping(ARttiType);
@@ -1218,27 +1161,16 @@ begin
       // If the HasOne reference is not created, then Create It!
       if not assigned(DestObj) then
       begin
-        if IsAlreadyLoaded(_child_type.Handle, AIdValue, Obj) then
-          DestObj := Obj
-        else
-          DestObj := LoadByMappingField(_child_type.Handle,
-            FMappingStrategy.GetMapping(_child_type)
-            .FindByName(_has_one.ChildFieldName), AIdValue);
+        DestObj := LoadByMappingField(_child_type.Handle,
+          FMappingStrategy.GetMapping(_child_type)
+          .FindByName(_has_one.ChildFieldName), AIdValue);
         TdormUtils.SetProperty(AObject, _has_one.Name, DestObj);
       end
       else
       begin
-        if IsAlreadyLoaded(_child_type.Handle, AIdValue, Obj) then
-        begin
-          DestObj.Free;
-          DestObj := Obj;
-        end
-        else
-        begin
-          LoadByMappingField(_child_type.Handle,
-            FMappingStrategy.GetMapping(_child_type)
-            .FindByName(_has_one.ChildFieldName), AIdValue, DestObj);
-        end;
+        LoadByMappingField(_child_type.Handle,
+          FMappingStrategy.GetMapping(_child_type)
+          .FindByName(_has_one.ChildFieldName), AIdValue, DestObj);
       end;
       SetObjectStatus(DestObj, osClean, false);
     end;
@@ -1631,7 +1563,6 @@ var
   _idValue: TValue;
   _validateable: TdormValidateable;
 begin
-  LoadEnter;
   rt := FCTX.GetType(ATypeInfo);
   GetLogger.EnterLevel('Load ' + rt.ToString);
   _table := FMappingStrategy.GetMapping(rt);
@@ -1648,19 +1579,6 @@ begin
     ApplyBackupObject(AObject);
   end;
   GetLogger.ExitLevel('Load ' + rt.ToString);
-  LoadExit;
-end;
-
-procedure TSession.LoadEnter;
-begin
-  Inc(FLoadEnterExitCounter);
-end;
-
-procedure TSession.LoadExit;
-begin
-  Dec(FLoadEnterExitCounter);
-  if FLoadEnterExitCounter = 0 then
-    LoadedObjects.Clear;
 end;
 
 class function TSession.Qualified(AMappingTable: TMappingTable;
@@ -2128,13 +2046,6 @@ begin
   finally
     GetLogger.ExitLevel('UPDATE ' + AObject.ClassName);
   end;
-end;
-
-function TSession.IsAlreadyLoaded(ATypeInfo: PTypeInfo; AValue: TValue;
-  out AOutObject: TObject): boolean;
-begin
-  Result := LoadedObjects.TryGetValue(GetLoadedObjectHashCode(ATypeInfo,
-    AValue), AOutObject);
 end;
 
 function TSession.IsClean(AObject: TObject): boolean;
