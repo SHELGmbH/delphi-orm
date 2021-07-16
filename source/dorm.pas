@@ -67,8 +67,6 @@ type
     FLogger: IdormLogger;
     FEnvironment: TdormEnvironment;
     EnvironmentNames: TArray<string>;
-    FLoadEnterExitCounter: Integer;
-    LoadedObjects: TObjectDictionary<string, TObject>;
     FOnAfterPersistObject: TdormSessionPersistEvent;
     FOnBeforePersistObject: TdormSessionPersistEvent;
     FOnBeforeConfigureStrategy: TdormStrategyConfigEvent;
@@ -510,8 +508,6 @@ begin
   EnvironmentNames[ord(deDevelopment)] := 'development';
   EnvironmentNames[ord(deTest)] := 'test';
   EnvironmentNames[ord(deRelease)] := 'release';
-  FLoadEnterExitCounter := 0;
-  LoadedObjects := TObjectDictionary<string, TObject>.Create;
 end;
 
 class function TSession.CreateConfigured(APersistenceConfiguration: TTextReader;
@@ -534,6 +530,7 @@ end;
 
 constructor TSession.Create(Environment: TdormEnvironment);
 begin
+  FCTX := TRttiContext.Create;
   CreateSession(Environment);
 end;
 
@@ -671,7 +668,6 @@ end;
 
 destructor TSession.Destroy;
 begin
-  LoadedObjects.Free;
   if assigned(FPersistStrategy) then
   begin
     if FPersistStrategy.InTransaction then
@@ -683,6 +679,7 @@ begin
   FValidatingDuck.Free;
   FValidatingDuck := nil;
   inherited;
+  FCTX := TRttiContext.Create;
 end;
 
 procedure TSession.DisableLazyLoad(AClass: TClass; const APropertyName: string);
