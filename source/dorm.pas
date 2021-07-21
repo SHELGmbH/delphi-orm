@@ -679,7 +679,7 @@ begin
   FValidatingDuck.Free;
   FValidatingDuck := nil;
   inherited;
-  FCTX := TRttiContext.Create;
+  FCTX.Free;
 end;
 
 procedure TSession.DisableLazyLoad(AClass: TClass; const APropertyName: string);
