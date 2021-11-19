@@ -82,6 +82,7 @@ type
     function GetConnection : TCustomConnection;
     function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
     function GetDBName: string;
+    function GetEngine: string; virtual; abstract;
     // End Method Interface IdormPersistStrategy
     destructor Destroy; override;
     class procedure register;

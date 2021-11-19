@@ -85,7 +85,9 @@ uses
   strutils,
   TimeSpan,
   {$IF CompilerVersion > 22}
+  {$IFDEF MSWINDOWS}
   Winapi.Windows,
+  {$ENDIF}
   System.SyncObjs;
   {$ELSE}
   Windows,

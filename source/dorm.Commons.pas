@@ -142,6 +142,7 @@ type
     function GetConnection : TCustomConnection;
     function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
     function GetDBName: string;
+    function GetEngine: string;
   end;
 
   TdormListEnumerator = class(TEnumerator<TObject>)

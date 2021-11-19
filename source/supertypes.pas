@@ -32,7 +32,7 @@ type
   SOIChar = Word;
   PSOChar = PChar;
   SOString = string;
-{$ifend}
+{$ENDIF}
 implementation
 
 end.

@@ -75,13 +75,12 @@ type
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue;
       AObject: TObject): Boolean; overload;
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable;
-      AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject)
-      : Boolean; overload;
+      AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean): Boolean; overload;
     function List(ARttiType: TRttiType; AMappingTable: TMappingTable; ACriteria: ICriteria)
       : TObjectList<TObject>;
     procedure LoadList(AList: TObject; ARttiType: TRttiType; AMappingTable: TMappingTable;
       ACriteria: ICriteria); overload;
-    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject); virtual;
+    procedure ConfigureStrategy(ConfigurationInfo: ISuperObject; const UnicodeDB: Boolean); virtual;
     procedure InitStrategy;
     procedure StartTransaction;
     procedure Commit;
@@ -98,12 +97,17 @@ type
     function GetDatabaseBuilder(AEntities: TList<String>; AMappings: ICacheMappingStrategy)
       : IDataBaseBuilder;
     function ExecuteCommand(ACommand: IdormCommand): Int64;
+    procedure ExecStoredProcedure(const AProcName: String; _InputParams, _OutputParams: TStringList);
+    function GetConnection : TCustomConnection;
+    function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
+    function GetDBName: string;
+    function GetEngine: string;
   end;
 
 implementation
 
 uses
-  dorm.Utils, System.StrUtils;
+  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts;
 
 function TSqlite3PersistStrategy.Update(ARttiType: TRttiType; AObject: TObject;
   AMappingTable: TMappingTable; ACurrentVersion: Int64): Int64;
@@ -146,7 +150,7 @@ begin
   DB.Commit('trans');
 end;
 
-procedure TSqlite3PersistStrategy.ConfigureStrategy(ConfigurationInfo: ISuperObject);
+procedure TSqlite3PersistStrategy.ConfigureStrategy(ConfigurationInfo: ISuperObject; const UnicodeDB: Boolean);
 var
   database_connection_string: string;
 begin
@@ -254,14 +258,41 @@ begin
   Result := StringReplace(Value, '''', '''''', [rfReplaceAll]);
 end;
 
+procedure TSqlite3PersistStrategy.ExecStoredProcedure(const AProcName: String;
+  _InputParams, _OutputParams: TStringList);
+begin
+  inherited;
+//
+end;
+
 function TSqlite3PersistStrategy.ExecuteAndGetFirst(SQL: string): Int64;
 begin
   Result := DB.GetTableValue(SQL);
 end;
 
 function TSqlite3PersistStrategy.ExecuteCommand(ACommand: IdormCommand): Int64;
+var
+  SQL: string;
+  ts : TDateTime;
 begin
-  raise EdormException.Create('not implemented');
+  SQL := ACommand.GetSQL;
+  GetLogger.Debug('EXECUTING: ' + SQL);
+  ts := Now;
+  try
+    Result := RawExecute(SQL);
+    GetLogger.LogCall(SQL, ts);
+  except
+    on e : Exception do begin
+      GetLogger.Error(e.Message, SQL);
+      raise;
+    end;
+  end;
+//  raise EdormException.Create('not implemented');
+end;
+
+function TSqlite3PersistStrategy.GetConnection: TCustomConnection;
+begin
+  Result := nil;
 end;
 
 function TSqlite3PersistStrategy.GetDatabaseBuilder(AEntities: TList<String>;
@@ -269,6 +300,22 @@ function TSqlite3PersistStrategy.GetDatabaseBuilder(AEntities: TList<String>;
 begin
   raise EdormException.Create('Not implemented');
   // Result := TdormSqlite3DBCreator.Create(AMappings, AEntities);
+end;
+
+function TSqlite3PersistStrategy.GetDBName: string;
+begin
+  Result := '';
+end;
+
+function TSqlite3PersistStrategy.GetEngine: string;
+begin
+  Result := S_FD_SQLite_RDBMS;
+end;
+
+function TSqlite3PersistStrategy.GetFieldTypeAndSize(const _Table,
+  _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
+begin
+  Result := False;
 end;
 
 function TSqlite3PersistStrategy.GetKeysGenerator: IdormKeysGenerator;
@@ -373,7 +420,7 @@ begin
 end;
 
 function TSqlite3PersistStrategy.Load(ARttiType: TRttiType; AMappingTable: TMappingTable;
-  AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject): Boolean;
+  AMappingRelationField: TMappingField; const Value: TValue; AObject: TObject; const DontRaiseExceptionOnUnexpectedMultiRowResult: Boolean): Boolean;
 var
   reader: TSqliteTable;
 begin
@@ -794,3 +841,4 @@ TSqlite3PersistStrategy.register;
 finalization
 
 end.
+

@@ -18,10 +18,14 @@ type
   public
     destructor Destroy; override;
     function CreateFireDACFacade(Conf: ISuperObject): TFireDACFacade; override;
+    function GetEngine: string; override;
     class procedure register;
   end;
 
 implementation
+
+uses
+  FireDAC.Stan.Consts;
 
 destructor TFireDACSQLServerPersistStrategy.Destroy;
 begin
@@ -36,6 +40,11 @@ begin
     Result := '1'
   else
     Result := '0';
+end;
+
+function TFireDACSQLServerPersistStrategy.GetEngine: string;
+begin
+  Result := S_FD_MSSQL_RDBMS;
 end;
 
 class procedure TFireDACSQLServerPersistStrategy.register;

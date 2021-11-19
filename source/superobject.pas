@@ -542,7 +542,7 @@ type
     function Write(writer: TSuperWriter; indent: boolean; escape: boolean; level: integer): Integer;
     function SaveTo(stream: TStream; indent: boolean = false; escape: boolean = true): integer; overload;
     function SaveTo(const FileName: string; indent: boolean = false; escape: boolean = true): integer; overload;
-    function SaveTo(socket: longint; indent: boolean = false; escape: boolean = true): integer; overload;
+    function SaveTo(socket: LongInt; indent: boolean = false; escape: boolean = true): integer; overload;
     function CalcSize(indent: boolean = false; escape: boolean = true): integer;
 
     // convert
@@ -667,7 +667,7 @@ type
     // Writers
     function SaveTo(stream: TStream; indent: boolean = false; escape: boolean = true): integer; overload;
     function SaveTo(const FileName: string; indent: boolean = false; escape: boolean = true): integer; overload;
-    function SaveTo(socket: longint; indent: boolean = false; escape: boolean = true): integer; overload;
+    function SaveTo(socket: LongInt; indent: boolean = false; escape: boolean = true): integer; overload;
     function CalcSize(indent: boolean = false; escape: boolean = true): integer;
     function AsJSon(indent: boolean = false; escape: boolean = true): SOString;
 
@@ -834,12 +834,17 @@ function SOInvoke(const obj: TValue; const method: string; const params: string;
 
 implementation
 uses
-  sysutils, Windows, superdate
+{$IFDEF MSWINDOWS}
+  Windows, superdate,
+{$ELSE}
+  superdateNoWinapi,
+{$ENDIF}
+    sysutils
 {$IFDEF FPC}
   ,sockets
 {$ELSE}
-  ,WinSock
-{$ENDIF}
+  ,System.Net.Socket
+  {$ENDIF}
   ;
 
 {$IFDEF DEBUG}
@@ -1695,7 +1700,7 @@ constructor TSuperObject.Create(jt: TSuperType);
 begin
   inherited Create;
 {$IFDEF DEBUG}
-  InterlockedIncrement(debugcount);
+  AtomicIncrement(debugcount);
 {$ENDIF}
 
   FProcessing := false;
@@ -1737,7 +1742,7 @@ end;
 destructor TSuperObject.Destroy;
 begin
 {$IFDEF DEBUG}
-  InterlockedDecrement(debugcount);
+  AtomicDecrement(debugcount);
 {$ENDIF}
   case FDataType of
     stObject: FO.c_object.Free;
@@ -2123,7 +2128,7 @@ end;
 
 procedure TSuperObject.AfterConstruction;
 begin
-  InterlockedDecrement(FRefCount);
+  AtomicDecrement(FRefCount);
 end;
 
 procedure TSuperObject.BeforeDestruction;
@@ -3303,7 +3308,7 @@ begin
   pb.Free;
 end;
 
-function TSuperObject.SaveTo(socket: Integer; indent, escape: boolean): integer;
+function TSuperObject.SaveTo(socket: LongInt; indent, escape: boolean): integer;
 var
   pb: TSuperWriterSock;
 begin
@@ -4223,12 +4228,12 @@ end;
 
 function TSuperObject._AddRef: Integer; stdcall;
 begin
-  Result := InterlockedIncrement(FRefCount);
+  Result := AtomicIncrement(FRefCount);
 end;
 
 function TSuperObject._Release: Integer; stdcall;
 begin
-  Result := InterlockedDecrement(FRefCount);
+  Result := AtomicDecrement(FRefCount);
   if Result = 0 then
     Destroy;
 end;
@@ -4790,12 +4795,14 @@ var
   pBuffer: PAnsiChar;
   i: Integer;
 begin
+  Result := 0;
   if Size = 1 then
 {$IFDEF FPC}
     Result := fpsend(FSocket, buf, size, 0) else
-{$ELSE}
+{$ELSEIF MSWINDOWS}
     Result := send(FSocket, buf^, size, 0) else
 {$ENDIF}
+
   begin
     if Size > SizeOf(Buffer) then
       GetMem(pBuffer, Size) else
@@ -4805,7 +4812,7 @@ begin
         pBuffer[i] := AnsiChar(buf[i]);
 {$IFDEF FPC}
       Result := fpsend(FSocket, pBuffer, size, 0);
-{$ELSE}
+{$ELSEIF MSWINDOWS}
       Result := send(FSocket, pBuffer^, size, 0);
 {$ENDIF}
     finally
@@ -4821,7 +4828,7 @@ begin
   Result := Append(buf, StrLen(buf));
 end;
 
-constructor TSuperWriterSock.Create(ASocket: Integer);
+constructor TSuperWriterSock.Create(ASocket: LongInt);
 begin
   inherited Create;
   FSocket := ASocket;

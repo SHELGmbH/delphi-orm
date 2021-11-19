@@ -71,12 +71,14 @@ end;
 
 class function TBaseAdapter.ISOStrToDateTime(DateTimeAsString: string): TDateTime;
 begin
-  Result := EncodeDateTime(StrToInt(Copy(DateTimeAsString, 1, 4)),
-    StrToInt(Copy(DateTimeAsString, 6, 2)),
-    StrToInt(Copy(DateTimeAsString, 9, 2)),
-    StrToInt(Copy(DateTimeAsString, 12, 2)),
-    StrToInt(Copy(DateTimeAsString, 15, 2)),
-    StrToInt(Copy(DateTimeAsString, 18, 2)), 0);
+
+  TryEncodeDateTime(
+    StrToIntDef(Copy(DateTimeAsString, 1, 4), 0),
+    StrToIntDef(Copy(DateTimeAsString, 6, 2), 0),
+    StrToIntDef(Copy(DateTimeAsString, 9, 2), 0),
+    StrToIntDef(Copy(DateTimeAsString, 12, 2), 0),
+    StrToIntDef(Copy(DateTimeAsString, 15, 2), 0),
+    StrToIntDef(Copy(DateTimeAsString, 18, 2), 0), 0, Result);
 end;
 
 class function TBaseAdapter.ISOStrToTime(TimeAsString: string): TTime;

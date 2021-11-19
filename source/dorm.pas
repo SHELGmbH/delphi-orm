@@ -318,7 +318,7 @@ implementation
 
 uses
   dorm.Adapters,
-  dorm.Utils, System.StrUtils;
+  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts;
 { TSession }
 
 procedure TSession.ApplyBackupObject(_Obj: TObject);
@@ -2335,8 +2335,14 @@ begin
   ItemTypeInfo := T.ClassInfo;
   rt := FCTX.GetType(ItemTypeInfo);
   Table := FMappingStrategy.GetMapping(rt);
-  CustomCrit := TSQLCustomCriteria.Create('select top 1 * from ' + Table.TableName +
-    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur fuer MSSQL!
+
+  if FPersistStrategy.GetEngine <> S_FD_MSSQL_RDBMS then begin
+    CustomCrit := TSQLCustomCriteria.Create('select * from ' + Table.TableName +
+      ' where ' + _WhereClause + ' limit 1');
+  end else begin
+    CustomCrit := TSQLCustomCriteria.Create('select top 1 * from ' + Table.TableName +
+      IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause);
+  end;
   Result := Load<T>(CustomCrit);
 end;
 
@@ -2344,7 +2350,9 @@ function TSession.TestConnection(out _Msg : string): boolean;
 begin
   _Msg := '';
   try
-    GetStrategy.GetConnection.Connected := True;
+    if Assigned(GetStrategy.GetConnection) then begin
+      GetStrategy.GetConnection.Connected := True;
+    end;
     Result := True;
   except
     on e : exception do begin
