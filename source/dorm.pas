@@ -1279,7 +1279,7 @@ begin
   LoadList(rt.AsInstance.MetaclassType, Criteria, AObject);
 {$ELSE}
   LoadList(T, Criteria, AObject);
-{$IFEND}
+{$ENDIF}
 end;
 
 procedure TSession.LoadRelationsForEachElement(AList: TObject;

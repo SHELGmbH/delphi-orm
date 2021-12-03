@@ -60,9 +60,9 @@ type
   public
     function FillPrimaryKeyParam(ADB: TSQLiteDatabase; AParamName: String; const Value: TValue)
       : TValue; overload;
-    function EscapeString(const Value: String): String;
-    function EscapeDate(const Value: TDate): String;
-    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String;
+    function EscapeString(const Value: String): String; override;
+    function EscapeDate(const Value: TDate): String; override;
+    function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String; override;
     function GetLastInsertOID: TValue;
     function GetKeysGenerator: IdormKeysGenerator;
     function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;

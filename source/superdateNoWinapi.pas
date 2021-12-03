@@ -22,15 +22,13 @@ uses
   SysUtils, DateUtils, Math;
 
 function JavaToDelphiDateTime(const dt: Int64): TDateTime;
-var
-  utc, local: TDateTime;
+//var utc, local: TDateTime;
 begin
   Result := UnixToDateTime(dt);
 end;
 
 function DelphiToJavaDateTime(const dt: TDateTime): Int64;
-var
-  local, utc, st: TDateTime;
+//var local, utc, st: TDateTime;
 begin
   Result := DateTimeToUnix(dt)
 end;
@@ -49,8 +47,7 @@ begin
 end;
 
 function ISO8601DateToDelphiDateTime(const str: SOString; var dt: TDateTime): Boolean;
-var
-  ms: Int64;
+//var ms: Int64;
 begin
   Result := TryISO8601ToDate(str, dt);
 end;

@@ -454,7 +454,7 @@ begin
     FGetItemMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetIndexedProperty('Items')
       .ReadMethod;
 
-  {$IFEND}
+  {$ENDIF}
     if not Assigned(FGetItemMethod) then
       FGetItemMethod := ctx.GetType(AObjectAsDuck.ClassInfo).GetMethod('GetItem');
     if not Assigned(FGetItemMethod) then

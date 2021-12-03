@@ -88,6 +88,9 @@ uses
   {$IFDEF MSWINDOWS}
   Winapi.Windows,
   {$ENDIF}
+  {$IFDEF ANDROID}
+  Posix.Stdio, Posix.Unistd,
+  {$ENDIF}
   System.SyncObjs;
   {$ELSE}
   Windows,
