@@ -144,7 +144,7 @@ type
     // function FindOne(AItemClassInfo: PTypeInfo; Criteria: ICriteria;
     // FillOptions: TdormFillOptions = []; FreeCriteria: Boolean = true)
     // : TObject; overload; deprecated;
-    function IsNullKey(ATableMap: TMappingTable; const AValue: TValue): boolean;
+    function IsNullKey(ATableMap: TMappingTable; const AValue: TValue; ACheckFK: Boolean = True): boolean;
     ///
     procedure InternalUpdate(AObject: TObject; AValidaetable: TdormValidateable;
       AOnlyChild: boolean = false);
@@ -1359,16 +1359,10 @@ begin
   end
   else
   begin
-    if _idValue.IsOrdinal then begin
-      if _idValue.AsInteger = FIdNullValue.AsInteger then
-        Insert(AObject)
-      else
-        Update(AObject);
+    if IsNullKey(_table, _idValue, False) then begin
+      Insert(AObject);
     end else begin
-      if _idValue.AsString = FIdNullValue.AsString then
-        Insert(AObject)
-      else
-        Update(AObject);
+      Update(AObject);
     end;
   end;
   DoSessionOnAfterPersistObject(AObject);
@@ -2060,12 +2054,11 @@ begin
   Result := FPersistStrategy.InTransaction;
 end;
 
-function TSession.IsNullKey(ATableMap: TMappingTable;
-  const AValue: TValue): boolean;
+function TSession.IsNullKey(ATableMap: TMappingTable; const AValue: TValue; ACheckFK: Boolean = True): boolean;
 begin
   if not assigned(ATableMap.Id) then begin
     Result := True;
-  end else if ATableMap.Id.IsFK then begin
+  end else if ACheckFK and ATableMap.Id.IsFK then begin
     Result := True;
   end else begin
     if ATableMap.Id.FieldType = 'string' then begin

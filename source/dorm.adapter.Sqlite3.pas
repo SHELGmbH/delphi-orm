@@ -49,6 +49,7 @@ type
     FKeyType: TdormKeyType;
     FNullKeyValue: TValue;
     FLastInsertOID: TValue;
+    FStandardDateFormat: string;
     procedure InitFormatSettings;
     function CreateObjectFromSqliteTable(ARttiType: TRttiType; AReader: TSqliteTable;
       AMappingTable: TMappingTable): TObject;
@@ -171,6 +172,7 @@ begin
   // ' doesn''t implements ''IdormKeysGenerator''');
   // FKeysGenerator.SetPersistStrategy(self);
   // self._Release;
+  FStandardDateFormat := ConfigurationInfo.S['standard_datetime_format'];
   if (SameText(ConfigurationInfo.S['key_type'], 'integer')) then
   begin
     FKeyType := ktInteger;
@@ -363,12 +365,12 @@ var
 begin
   sql_fields_names := '';
   for field in AMappingTable.Fields do
-    if not field.IsPK then
+    if (not field.IsPK or field.IsFK) then
       sql_fields_names := sql_fields_names + ',' + ansistring(field.FieldName) + '';
   System.Delete(sql_fields_names, 1, 1);
   sql_fields_values := '';
   for field in AMappingTable.Fields do
-    if not field.IsPK then
+    if (not field.IsPK or field.IsFK) then
       sql_fields_values := sql_fields_values + ', :' + ansistring(field.FieldName);
   System.Delete(sql_fields_values, 1, 1);
   SQL := ansistring(Format('INSERT INTO %s (%S) VALUES (%S)', [AMappingTable.TableName,
@@ -378,14 +380,19 @@ begin
   for field in AMappingTable.Fields do
   begin
     v := TdormUtils.GetField(AObject, field.RTTICache);
-    if not field.IsPK then
+    if (not field.IsPK or field.IsFK) then
       SetSqlite3ParameterValue(DB, field.FieldType, ':' + field.FieldName, v);
   end;
   GetLogger.Debug('EXECUTING PREPARED :' + string(SQL));
   DB.ExecSQL(string(SQL));
   pk_value := DB.LastInsertRowID;
   pk_idx := GetPKMappingIndex(AMappingTable.Fields);
-  TdormUtils.SetProperty(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
+  if AMappingTable.Fields[pk_idx].FieldType = 'string' then begin
+    pk_value := pk_value.ToString;
+  end;
+  if pk_idx <> -1 then begin
+    TdormUtils.SetProperty(AObject, AMappingTable.Fields[pk_idx].RTTICache, pk_value);
+  end;
   Result := pk_value;
   FLastInsertOID := Result;
 end;
@@ -470,9 +477,9 @@ begin
       ktString:
         begin
           { todo: implement string primary keys for sqlite3 }
-          raise EdormException.Create(ClassName + ' do not support string primary keys');
-          // ADB.AddParamText(AParamName, Value.AsString);
-          // Result := Value.AsString;
+//          raise EdormException.Create(ClassName + ' do not support string primary keys');
+          ADB.AddParamText(AParamName, Value.AsString);
+          Result := Value.AsString;
         end;
       ktInteger:
         begin
@@ -720,9 +727,18 @@ begin
   end
   else if CompareText(aFieldType, 'datetime') = 0 then
   begin
-    ADB.AddParamText(aParameterName, ISODateTimeToString(aValue.AsExtended));
-    // EscapeDateTime(FloatToDateTime(aValue.AsExtended)));
-    GetLogger.Debug(aParameterName + ' = ' + EscapeDateTime(FloatToDateTime(aValue.AsExtended)));
+    if aValue.AsExtended = 0 then begin
+      ADB.AddParamNull(aParameterName);
+      GetLogger.Debug(aParameterName + ' = NULL');
+    end else begin
+      if FStandardDateFormat = '' then begin
+        ADB.AddParamText(aParameterName, ISODateTimeToString(aValue.AsExtended));
+      end else begin
+        ADB.AddParamText(aParameterName, FormatDateTime(FStandardDateFormat, aValue.AsExtended, TFormatSettings.Create));
+      end;
+      // EscapeDateTime(FloatToDateTime(aValue.AsExtended)));
+      GetLogger.Debug(aParameterName + ' = ' + EscapeDateTime(FloatToDateTime(aValue.AsExtended)));
+    end;
   end
   else if CompareText(aFieldType, 'time') = 0 then
   begin
