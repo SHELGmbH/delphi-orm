@@ -35,7 +35,7 @@ type
     function GetFireDACReaderFor(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue;
       AMappingRelationField: TMappingField = nil): TFDQuery;
     function GetSqlFieldsForUpdate(AMappingTable: TMappingTable; AObject: TObject; _ParamFields : TStringList): string;
-    procedure SetNullParameterValue(AStatement: TFDQuery; ParameterIndex: Integer);
+    procedure SetNullParameterValue(AParam: TFDParam);
   protected
     FFormatSettings: TFormatSettings;
     FD: TFireDACFacade;
@@ -47,8 +47,7 @@ type
     procedure LoadObjectFromFireDACReader(AObject: TObject; ARttiType: TRttiType; AReader: TFDQuery;
   AFieldsMapping: TMappingFieldList; const _FieldQualifier : string = '');
     function GetLogger: IdormLogger;
-    procedure SetFireDACParameterValue(AField: TMappingField; AStatement: TFDQuery; ParameterIndex: Integer;
-      AValue: TValue; AIsNullable: boolean = False);
+    procedure SetFireDACParameterValue(AField: TMappingField; AStatement: TFDQuery; AValue: TValue; AIsNullable: boolean = False);
     function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): string; override;
   public
     // Start Method Interface IdormPersistStrategy
@@ -148,14 +147,12 @@ begin
       Query := FD.NewQuery;
       Query.SQL.Text := SQL;
       try
-        I := 0;
         for field in AMappingTable.Fields do begin
           // manage nullable fields
           isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
           if ParamFields.IndexOf(field.FieldName) >= 0 then begin
             v := TdormUtils.GetField(AObject, field.name);
-            SetFireDACParameterValue(field, Query, I, v, isNullable);
-            inc(I);
+            SetFireDACParameterValue(field, Query, v, isNullable);
           end;
         end;
         // Retrieve pk index
@@ -163,7 +160,7 @@ begin
         // Retrieve pk value
         v := ARttiType.GetProperty(AMappingTable.Fields[pk_idx].name).GetValue(AObject);
         // Set pk parameter value
-        SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, I, v);
+        SetFireDACParameterValue(AMappingTable.Fields[pk_idx], Query, v);
 
         ts := Now;
         GetLogger.Debug('EXECUTING PREPARED: ' + SQL);
@@ -394,7 +391,7 @@ var
   field: TMappingField;
   sql_fields_names, sql_fields_values, SQL: String;
   Query: TFDQuery;
-  I, pk_idx: Integer;
+  pk_idx: Integer;
   v, pk_value: TValue;
   isTransient: boolean;
   isNullable: boolean;
@@ -437,17 +434,14 @@ begin
     Query := FD.NewQuery;
     Query.SQL.Text := SQL;
     try
-      I := 0;
-      for field in AMappingTable.Fields do
-      begin
+      for field in AMappingTable.Fields do begin
         v := TdormUtils.GetField(AObject, field.RTTICache);
         // manage nullable fields
         isNullable := TdormUtils.HasAttribute<Nullable>(field.RTTICache.RTTIProp);
 
         if ParamFields.IndexOf(field.FieldName) >= 0 then begin
           v := TdormUtils.GetField(AObject, field.RTTICache);
-          SetFireDACParameterValue(field, Query, I, v, isNullable);
-          inc(I);
+          SetFireDACParameterValue(field, Query, v, isNullable);
         end;
       end;
       ts := Now;
@@ -962,135 +956,141 @@ begin
 end;
 
 procedure TFireDACBaseAdapter.SetFireDACParameterValue(AField: TMappingField; AStatement: TFDQuery;
-  ParameterIndex: Integer; AValue: TValue; AIsNullable: boolean);
+  AValue: TValue; AIsNullable: boolean);
 var
   sourceStream: TStream;
   str: TStringStream;
   StrVal : string;
+  Param : TFDParam;
 begin
-  if CompareText(AField.FieldType, 'string') = 0 then
-  begin
-    if AField.Size > 0 then begin
-      StrVal := AValue.AsString.Substring(0, AField.Size);
-    end else begin
-      StrVal := AValue.AsString;
-    end;
-    if ByteLength(StrVal) > 8000 then begin
-      AStatement.Params[ParameterIndex].DataType := ftWideMemo;
-      AStatement.Params[ParameterIndex].AsWideMemo := StrVal;
-    end else begin
-      if AStatement.Command.UnicodeDB then begin
-        AStatement.Params[ParameterIndex].DataType := ftWideString;
+  Param := AStatement.ParamByName(AField.FieldName);
+  if assigned(Param) then begin
+    if CompareText(AField.FieldType, 'string') = 0 then
+    begin
+      if AField.Size > 0 then begin
+        StrVal := AValue.AsString.Substring(0, AField.Size);
       end else begin
-        AStatement.Params[ParameterIndex].DataType := ftString;
+        StrVal := AValue.AsString;
       end;
-      AStatement.Params[ParameterIndex].AsString := StrVal;
-    end;
-    GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + StrVal);
-  end
-  else if CompareText(AField.FieldType, 'decimal') = 0 then
-  begin
-    if (AValue.AsExtended = 0.0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      if ByteLength(StrVal) > 8000 then begin
+        Param.DataType := ftWideMemo;
+        Param.AsWideMemo := StrVal;
+      end else begin
+        if AStatement.Command.UnicodeDB then begin
+          Param.DataType := ftWideString;
+        end else begin
+          Param.DataType := ftString;
+        end;
+        Param.AsString := StrVal;
+      end;
+      GetLogger.Debug(Param.Name + ' = ' + StrVal);
+    end
+    else if CompareText(AField.FieldType, 'decimal') = 0 then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftFloat;
-      AStatement.Params[ParameterIndex].AsFloat := AValue.AsExtended;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
-    end;
-  end
-  else if CompareText(AField.FieldType, 'float') = 0 then
-  begin
-    if (AValue.AsExtended = 0.0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      if (AValue.AsExtended = 0.0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftFloat;
+        Param.AsFloat := AValue.AsExtended;
+        GetLogger.Debug(Param.Name + ' = ' + FloatToStr(AValue.AsExtended));
+      end;
+    end
+    else if CompareText(AField.FieldType, 'float') = 0 then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftFloat;
-      AStatement.Params[ParameterIndex].AsFloat := AValue.AsExtended;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + FloatToStr(AValue.AsExtended));
-    end;
-  end
-  else if (CompareText(AField.FieldType, 'integer') = 0) or (CompareText(AField.FieldType, 'int64') = 0) then
-  begin
-    if (AValue.AsInt64 = 0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      if (AValue.AsExtended = 0.0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftFloat;
+        Param.AsFloat := AValue.AsExtended;
+        GetLogger.Debug(Param.Name + ' = ' + FloatToStr(AValue.AsExtended));
+      end;
+    end
+    else if (CompareText(AField.FieldType, 'integer') = 0) or (CompareText(AField.FieldType, 'int64') = 0) then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftLargeint;
-      AStatement.Params[ParameterIndex].AsLargeInt := AValue.AsInt64;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + IntToStr(AValue.AsInt64));
-    end;
-  end
-  else if CompareText(AField.FieldType, 'boolean') = 0 then
-  begin
-    AStatement.Params[ParameterIndex].DataType := ftBoolean;
-    AStatement.Params[ParameterIndex].AsBoolean := AValue.AsBoolean;
-    GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + BoolToStr(AValue.AsBoolean, true));
-  end
-  else if CompareText(AField.FieldType, 'date') = 0 then
-  begin
-    if (AValue.AsExtended = 0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      if (AValue.AsInt64 = 0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftLargeint;
+        Param.AsLargeInt := AValue.AsInt64;
+        GetLogger.Debug(Param.Name + ' = ' + IntToStr(AValue.AsInt64));
+      end;
+    end
+    else if CompareText(AField.FieldType, 'boolean') = 0 then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftDate;
-      AStatement.Params[ParameterIndex].AsDate := trunc(AValue.AsExtended);
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDate(trunc(AValue.AsExtended)));
-    end;
-  end
-  else if CompareText(AField.FieldType, 'datetime') = 0 then
-  begin
-    if (AValue.AsExtended = 0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      Param.DataType := ftBoolean;
+      Param.AsBoolean := AValue.AsBoolean;
+      GetLogger.Debug(Param.Name + ' = ' + BoolToStr(AValue.AsBoolean, true));
+    end
+    else if CompareText(AField.FieldType, 'date') = 0 then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftDateTime;
-      AStatement.Params[ParameterIndex].AsDateTime := AValue.AsExtended;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDateTime(AValue.AsExtended, true));
-    end;
-  end
-  else if CompareText(AField.FieldType, 'time') = 0 then
-  begin
-    if (AValue.AsExtended = 0) and AIsNullable then
-      SetNullParameterValue(AStatement, ParameterIndex)
-    else
+      if (AValue.AsExtended = 0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftDate;
+        Param.AsDate := trunc(AValue.AsExtended);
+        GetLogger.Debug(Param.Name + ' = ' + EscapeDate(trunc(AValue.AsExtended)));
+      end;
+    end
+    else if CompareText(AField.FieldType, 'datetime') = 0 then
     begin
-      AStatement.Params[ParameterIndex].DataType := ftTime;
-      AStatement.Params[ParameterIndex].AsDateTime := AValue.AsExtended;
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ' + EscapeDateTime(AValue.AsExtended));
-    end;
-  end
-  else if CompareText(AField.FieldType, 'blob') = 0 then
-  begin
-    sourceStream := TStream(AValue.AsObject);
-    if sourceStream = nil then
+      if (AValue.AsExtended = 0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftDateTime;
+        Param.AsDateTime := AValue.AsExtended;
+        GetLogger.Debug(Param.Name + ' = ' + EscapeDateTime(AValue.AsExtended, true));
+      end;
+    end
+    else if CompareText(AField.FieldType, 'time') = 0 then
     begin
-      AStatement.Params[ParameterIndex].AsBlob := '';
-      GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = nil');
+      if (AValue.AsExtended = 0) and AIsNullable then
+        SetNullParameterValue(Param)
+      else
+      begin
+        Param.DataType := ftTime;
+        Param.AsDateTime := AValue.AsExtended;
+        GetLogger.Debug(Param.Name + ' = ' + EscapeDateTime(AValue.AsExtended));
+      end;
+    end
+    else if CompareText(AField.FieldType, 'blob') = 0 then
+    begin
+      sourceStream := TStream(AValue.AsObject);
+      if sourceStream = nil then
+      begin
+        Param.AsBlob := '';
+        GetLogger.Debug(Param.Name + ' = nil');
+      end
+      else
+      begin
+        str := TStringStream.Create;
+        try
+          sourceStream.Position := 0;
+          str.CopyFrom(sourceStream, 0);
+          str.Position := 0;
+          Param.AsBlob := str.DataString;
+          GetLogger.Debug(Param.Name + ' = <blob ' + IntToStr(str.Size) + ' bytes>');
+        finally
+          str.Free;
+        end;
+      end;
     end
     else
-    begin
-      str := TStringStream.Create;
-      try
-        sourceStream.Position := 0;
-        str.CopyFrom(sourceStream, 0);
-        str.Position := 0;
-        AStatement.Params[ParameterIndex].AsBlob := str.DataString;
-        GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = <blob ' + IntToStr(str.Size) + ' bytes>');
-      finally
-        str.Free;
-      end;
-    end;
-  end
-  else
-    raise EdormException.CreateFmt('Parameter type not supported: [%s]', [AField.FieldType]);
+      raise EdormException.CreateFmt('Parameter type not supported: [%s]', [AField.FieldType]);
+  end else begin
+    raise EdormException.CreateFmt('Parameter not found: [%s]', [AField.FieldName]);
+  end;
 end;
 
-procedure TFireDACBaseAdapter.SetNullParameterValue(AStatement: TFDQuery; ParameterIndex: Integer);
+procedure TFireDACBaseAdapter.SetNullParameterValue(AParam: TFDParam);
 begin
-  AStatement.Params[ParameterIndex].DataType := ftString;
-  AStatement.Params[ParameterIndex].AsString := '';
-  GetLogger.Debug('Par' + IntToStr(ParameterIndex) + ' = ');
+  AParam.DataType := ftString;
+  AParam.AsString := '';
+  GetLogger.Debug(AParam.Name + ' = ');
 end;
 
 procedure TFireDACBaseAdapter.SetLogger(ALogger: IdormLogger);
