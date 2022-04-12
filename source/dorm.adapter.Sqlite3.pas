@@ -56,9 +56,11 @@ type
     procedure LoadObjectFromSqliteTable(AObject: TObject; ARttiType: TRttiType;
       AReader: TSqliteTable; AFieldsMapping: TMappingFieldList);
     function GetLogger: IdormLogger;
+    function GetSqlite3ParameterValue(aFieldType: string; aParameterName: String; aValue: TValue): string;
     procedure SetSqlite3ParameterValue(ADB: TSQLiteDatabase; aFieldType: string;
       aParameterName: String; aValue: TValue);
   public
+    function CanUpsert: Boolean; override;
     function FillPrimaryKeyParam(ADB: TSQLiteDatabase; AParamName: String; const Value: TValue)
       : TValue; overload;
     function EscapeString(const Value: String): String; override;
@@ -66,7 +68,9 @@ type
     function EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String; override;
     function GetLastInsertOID: TValue;
     function GetKeysGenerator: IdormKeysGenerator;
-    function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;
+    function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue; overload;
+    function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable; AUpsert: Boolean = False): TValue; overload;
+    function Upsert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue; override;
     function Update(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable;
       ACurrentVersion: Int64): Int64;
     function Delete(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable;
@@ -90,7 +94,7 @@ type
     procedure SetLogger(ALogger: IdormLogger);
     destructor Destroy; override;
     class procedure register;
-    function IsNullKey(const Value: TValue): Boolean;
+    function IsNullKey(ATableMap: TMappingTable; const Value: TValue; ACheckFK: Boolean = True): Boolean;
     function GetNullKeyValue: TValue;
     function GetKeyType: TdormKeyType;
     function RawExecute(SQL: string): Int64;
@@ -142,6 +146,48 @@ begin
   DB.ExecSQL(SQL);
   Result := DB.LastChangedRows;
   DB.ParamsClear;
+end;
+
+function TSqlite3PersistStrategy.Upsert(ARttiType: TRttiType; AObject: TObject;
+  AMappingTable: TMappingTable): TValue;
+var field: TMappingField;
+    v: TValue;
+    Upsert: Boolean;
+    Version: string;
+    VersionArr: TArray<string>;
+    VersionOK: Boolean;
+begin
+  Upsert := True;
+  VersionOK := True;
+  for field in AMappingTable.Fields do begin
+    if field.IsPK then begin
+      v := TdormUtils.GetField(AObject, field.RTTICache);
+      if IsNullKey(AMappingTable, v, False) then begin
+        Upsert := False;
+        Break;
+      end;
+    end;
+  end;
+  if Upsert then begin
+    VersionOK := False;
+    Version := DB.Version;
+    VersionArr := Version.Split(['.']);
+    if Length(VersionArr) >= 2 then begin
+      if (StrToIntDef(VersionArr[0], 0) >= 3) and (StrToIntDef(VersionArr[1], 0) >= 24) then begin
+        VersionOK := True;
+      end;
+    end;
+  end;
+  if VersionOK OR not Upsert then begin
+    Insert(ARttiType, AObject, AMappingTable, Upsert);
+  end else begin
+    Update(ARttiType, AObject, AMappingTable, 0);
+  end;
+end;
+
+function TSqlite3PersistStrategy.CanUpsert: Boolean;
+begin
+  Result := True;
 end;
 
 procedure TSqlite3PersistStrategy.Commit;
@@ -357,36 +403,63 @@ end;
 
 function TSqlite3PersistStrategy.Insert(ARttiType: TRttiType; AObject: TObject;
   AMappingTable: TMappingTable): TValue;
+begin
+  Insert(ARttiType, AObject, AMappingTable, False);
+end;
+
+function TSqlite3PersistStrategy.Insert(ARttiType: TRttiType; AObject: TObject;
+  AMappingTable: TMappingTable; AUpsert: Boolean): TValue;
 var
   field: TMappingField;
   sql_fields_names, sql_fields_values, SQL: ansistring;
   pk_idx: Integer;
   v, pk_value: TValue;
+  PreStr: string;
+  OldLastInsertedRowID: Integer;
+  NewLastInsertedRowID: Integer;
 begin
   sql_fields_names := '';
   for field in AMappingTable.Fields do
-    if (not field.IsPK or field.IsFK) then
+    if (not field.IsPK or field.IsFK or AUpsert) then
       sql_fields_names := sql_fields_names + ',' + ansistring(field.FieldName) + '';
   System.Delete(sql_fields_names, 1, 1);
   sql_fields_values := '';
   for field in AMappingTable.Fields do
-    if (not field.IsPK or field.IsFK) then
+    if (not field.IsPK or field.IsFK or AUpsert) then
       sql_fields_values := sql_fields_values + ', :' + ansistring(field.FieldName);
   System.Delete(sql_fields_values, 1, 1);
-  SQL := ansistring(Format('INSERT INTO %s (%S) VALUES (%S)', [AMappingTable.TableName,
+  SQL := ansistring(Format('INSERT INTO %s (%S) VALUES (%S) ', [AMappingTable.TableName,
     sql_fields_names, sql_fields_values]));
+  pk_idx := GetPKMappingIndex(AMappingTable.Fields);
+  if AUpsert then begin
+    SQL := SQL + ansistring(Format('ON CONFLICT(%s) DO UPDATE SET ', [AMappingTable.Fields[pk_idx].FieldName]));
+    PreStr := '';
+    for field in AMappingTable.Fields do begin
+      if not field.IsPK then begin
+        SQL := SQL + ansistring(PreStr + Format('%s = excluded.%s', [field.name, field.name]));
+        PreStr := ',';
+      end;
+    end;
+  end;
   GetLogger.Debug('PREPARING :' + string(SQL));
   DB.ParamsClear;
-  for field in AMappingTable.Fields do
-  begin
-    v := TdormUtils.GetField(AObject, field.RTTICache);
-    if (not field.IsPK or field.IsFK) then
-      SetSqlite3ParameterValue(DB, field.FieldType, ':' + field.FieldName, v);
-  end;
+    for field in AMappingTable.Fields do
+    begin
+      v := TdormUtils.GetField(AObject, field.RTTICache);
+      if (not field.IsPK or field.IsFK or AUpsert) then
+        SetSqlite3ParameterValue(DB, field.FieldType, ':' + field.FieldName, v);
+    end;
   GetLogger.Debug('EXECUTING PREPARED :' + string(SQL));
+  OldLastInsertedRowID := DB.LastInsertRowID;
+  DB.SetLastInsertRowID(0);
   DB.ExecSQL(string(SQL));
-  pk_value := DB.LastInsertRowID;
-  pk_idx := GetPKMappingIndex(AMappingTable.Fields);
+  NewLastInsertedRowID := DB.LastInsertRowID;
+  if NewLastInsertedRowID = 0 then begin
+    DB.SetLastInsertRowID(OldLastInsertedRowID);
+    pk_value := TdormUtils.GetField(AObject, AMappingTable.Fields[pk_idx].RTTICache);
+  end else begin
+    pk_value := NewLastInsertedRowID;
+  end;
   if AMappingTable.Fields[pk_idx].FieldType = 'string' then begin
     pk_value := pk_value.ToString;
   end;
@@ -402,15 +475,18 @@ begin
   Result := DB.InTransaction;
 end;
 
-function TSqlite3PersistStrategy.IsNullKey(const Value: TValue): Boolean;
+function TSqlite3PersistStrategy.IsNullKey(ATableMap: TMappingTable; const Value: TValue; ACheckFK: Boolean = True): Boolean;
 begin
-  case FKeyType of
-    ktInteger:
-      Result := Value.AsInt64 = FNullKeyValue.AsInt64;
-    ktString:
-      Result := Value.AsString = FNullKeyValue.AsString;
-  else
-    raise EdormException.Create('Unknown key type');
+  if not Assigned(AtableMap.Id) then begin
+    Result := True;
+  end else if ACheckFK and ATableMap.Id.IsFK then begin
+    Result := True;
+  end else begin
+    if ATableMap.Id.FieldType = 'string' then begin
+      Result := TdormUtils.EqualValues(Value, '');
+    end else begin
+      Result := TdormUtils.EqualValues(Value, FNullKeyValue);
+    end;
   end;
 end;
 
@@ -490,6 +566,78 @@ begin
   except
     on E: Exception do
       raise EdormException.Create('Error during fill primary key for query. ' + E.Message);
+  end;
+end;
+
+function TSqlite3PersistStrategy.GetSqlite3ParameterValue(aFieldType,
+  aParameterName: String; aValue: TValue): string;
+var
+  sourceStream: TStream;
+//  str: TMemoryStream;
+begin
+  if CompareText(aFieldType, 'string') = 0 then
+  begin
+    Result := QuotedStr(aValue.AsString);
+  end
+  else if (CompareText(aFieldType, 'integer') = 0) or (CompareText(aFieldType, 'int64') = 0) then
+  begin
+    Result := IntToStr(aValue.AsInteger);
+  end
+  else if CompareText(aFieldType, 'decimal') = 0 then
+  begin
+    Result := FloatToStr(aValue.AsExtended);
+  end
+  else if CompareText(aFieldType, 'boolean') = 0 then
+  begin
+    if aValue.AsBoolean then
+    begin
+      Result := '1';
+    end
+    else
+    begin
+      Result := '0';
+    end;
+  end
+  else if CompareText(aFieldType, 'date') = 0 then
+  begin
+    Result := QuotedStr(ISODateToString(aValue.AsExtended));
+  end
+  else if CompareText(aFieldType, 'datetime') = 0 then
+  begin
+    if aValue.AsExtended = 0 then begin
+      Result := 'NULL';
+    end else begin
+      if FStandardDateFormat = '' then begin
+        Result := QuotedStr(ISODateTimeToString(aValue.AsExtended));
+      end else begin
+        Result := QuotedStr(FormatDateTime(FStandardDateFormat, aValue.AsExtended, TFormatSettings.Create));
+      end;
+    end;
+  end
+  else if CompareText(aFieldType, 'time') = 0 then
+  begin
+    Result := QuotedStr(ISOTimeToString(Frac(FloatToDateTime(aValue.AsExtended))));
+  end
+  else if CompareText(aFieldType, 'blob') = 0 then
+  begin
+    sourceStream := TStream(aValue.AsObject);
+    if sourceStream = nil then
+    begin
+      Result := 'NULL';
+    end
+    else
+    begin
+      raise Exception.Create('blob-type not implemented (' + aParameterName + ')');
+//      str := TMemoryStream.Create;
+//      try
+//        sourceStream.Position := 0;
+//        str.CopyFrom(sourceStream, sourceStream.Size);
+//        str.Position := 0;
+//        ADB.AddParamBlobPtr(aParameterName, str.Memory, str.Size);
+//      finally
+//        str.Free;
+//      end;
+    end;
   end;
 end;
 

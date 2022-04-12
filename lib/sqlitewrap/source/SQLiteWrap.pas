@@ -157,6 +157,8 @@ type
     procedure Rollback(const name: String);
     { : Get ROWID of last inserted row. }
     function LastInsertRowID: int64;
+    { : Set result of LastInsertRowID function. }
+    procedure SetLastInsertRowID(RowID: int64);
     { : Return number of modified rows by last query. }
     function LastChangedRows: int64;
     { : Return number of modified rows starting by opened database connection. }
@@ -363,10 +365,13 @@ procedure TSQLiteDatabase.ExecSQL(const SQL: String);
 var
   Stmt: TSQLiteStmt;
   NextSQLStatement: PAnsiChar;
+  NextSQLStatementStr: string;
   iStepResult: integer;
 begin
   try
-    if Sqlite3_Prepare_v2(self.fDB, PAnsiChar(UTF8String(SQL)), -1, Stmt, NextSQLStatement) <>
+    var tmp: Integer;
+    tmp := Sqlite3_Prepare_v2(self.fDB, PAnsiChar(UTF8String(SQL)), -1, Stmt, NextSQLStatement);
+    if tmp <>
       SQLITE_OK then
       RaiseError(c_errorsql, SQL);
     if (Stmt = nil) then
@@ -383,6 +388,10 @@ begin
   finally
     if Assigned(Stmt) then
       Sqlite3_Finalize(Stmt);
+  end;
+  NextSQLStatementStr := Trim(string(NextSQLStatement));
+  if NextSQLStatementStr <> '' then begin
+    ExecSQL(NextSQLStatementStr);
   end;
 end;
 
@@ -572,6 +581,11 @@ begin
   x := value.Read(pointer(buffer[1])^, len);
   setlength(buffer, x);
   AddParamBlobText(name, buffer);
+end;
+
+procedure TSQLiteDatabase.SetLastInsertRowID(RowID: int64);
+begin
+  Sqlite3_SetLastInsertRowID(self.fDB, RowID);
 end;
 
 procedure TSQLiteDatabase.SetParams(const Stmt: TSQLiteStmt);

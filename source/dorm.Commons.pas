@@ -33,7 +33,7 @@ uses
   dorm.ObjectStatus, System.Types, DB;
 
 type
-  TDormSaveMode = (os_Insert, os_Update, os_Delete);
+  TDormSaveMode = (os_Insert, os_Update, os_Delete, os_Upsert);
   TDuckTypedList = class;
 
   EdormException = class(Exception)
@@ -102,6 +102,7 @@ type
     function Insert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;
     function Update(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable;
       ACurrentVersion: Int64): Int64;
+    function Upsert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue;
     function Delete(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable;
       ACurrentVersion: Int64): Int64;
     function Load(ARttiType: TRttiType; AMappingTable: TMappingTable; const Value: TValue;
@@ -143,6 +144,7 @@ type
     function GetFieldTypeAndSize(const _Table, _Field: string; out _Type: TFieldType; out _Size: integer): Boolean;
     function GetDBName: string;
     function GetEngine: string;
+    function CanUpsert: Boolean;
   end;
 
   TdormListEnumerator = class(TEnumerator<TObject>)
@@ -203,6 +205,8 @@ type
     procedure UpdateValidate; virtual; abstract;
     // Called after "Validate" only while Deleting
     procedure DeleteValidate; virtual; abstract;
+    // Called after "Validate" only while Upserting
+    procedure UpsertValidate; virtual; abstract;
 
     // Events related method
     procedure OnBeforeLoad; virtual; abstract;
@@ -219,6 +223,9 @@ type
 
     procedure OnBeforeDelete; virtual; abstract;
     procedure OnAfterDelete; virtual; abstract;
+
+    procedure OnBeforeUpsert; virtual; abstract;
+    procedure OnAfterUpsert; virtual; abstract;
   end;
 
   TDuckTypedObject = class(TdormValidateable)
@@ -232,6 +239,7 @@ type
     FInsertValidate: TRttiMethod;
     FUpdateValidate: TRttiMethod;
     FDeleteValidate: TRttiMethod;
+    FUpsertValidate: TRttiMethod;
     FOnBeforeLoad: TRttiMethod;
     FOnAfterLoad: TRttiMethod;
 
@@ -246,6 +254,9 @@ type
 
     FOnBeforeDelete: TRttiMethod;
     FOnAfterDelete: TRttiMethod;
+
+    FOnBeforeUpsert: TRttiMethod;
+    FOnAfterUpsert: TRttiMethod;
 
     procedure BindValidatingMethods(AType: TRttiType);
     procedure BindEventsMethods(AType: TRttiType);
@@ -263,6 +274,8 @@ type
     procedure UpdateValidate; override;
     // Called after "Validate" only while Deleting
     procedure DeleteValidate; override;
+    // Called after "Validate" only while upserting
+    procedure UpsertValidate; override;
     procedure OnAfterLoad; override;
     procedure OnBeforeLoad; override;
 
@@ -277,6 +290,9 @@ type
 
     procedure OnBeforeDelete; override;
     procedure OnAfterDelete; override;
+
+    procedure OnBeforeUpsert; override;
+    procedure OnAfterUpsert; override;
 
   public
     constructor Create;
@@ -608,6 +624,18 @@ begin
     FOnAfterDelete := _Method
   else
     FOnAfterDelete := nil;
+
+  _Method := _type.GetMethod('OnBeforeUpsert');
+  if Assigned(_Method) and (Length(_Method.GetParameters) = 0) then
+    FOnBeforeUpsert := _Method
+  else
+    FOnBeforeUpsert := nil;
+
+  _Method := _type.GetMethod('OnAfterUpsert');
+  if Assigned(_Method) and (Length(_Method.GetParameters) = 0) then
+    FOnAfterUpsert := _Method
+  else
+    FOnAfterUpsert := nil;
 end;
 
 procedure TDuckTypedObject.BindValidatingMethods(AType: TRttiType);
@@ -638,6 +666,11 @@ begin
   else
     FDeleteValidate := nil;
 
+  _Method := _type.GetMethod('UpsertValidate');
+  if Assigned(_Method) and (not((Length(_Method.GetParameters) <> 0))) then
+    FUpsertValidate := _Method
+  else
+    FUpsertValidate := nil;
 end;
 
 procedure TDuckTypedObject.InitializeDuckedInterface;
@@ -683,6 +716,11 @@ begin
   SafeMethodCall(FOnAfterUpdate, FObjectAsDuck);
 end;
 
+procedure TDuckTypedObject.OnAfterUpsert;
+begin
+  SafeMethodCall(FOnAfterUpsert, FObjectAsDuck);
+end;
+
 procedure TDuckTypedObject.OnBeforeDelete;
 begin
   SafeMethodCall(FOnBeforeDelete, FObjectAsDuck);
@@ -708,6 +746,11 @@ begin
   SafeMethodCall(FOnBeforeUpdate, FObjectAsDuck);
 end;
 
+procedure TDuckTypedObject.OnBeforeUpsert;
+begin
+  SafeMethodCall(FOnBeforeUpsert, FObjectAsDuck);
+end;
+
 function TDuckTypedObject.SafeMethodCall(AMethod: TRttiMethod; AObject: TObject): boolean;
 begin
   Result := true;
@@ -718,6 +761,11 @@ end;
 procedure TDuckTypedObject.UpdateValidate;
 begin
   SafeMethodCall(FUpdateValidate, FObjectAsDuck);
+end;
+
+procedure TDuckTypedObject.UpsertValidate;
+begin
+  SafeMethodCall(FUpsertValidate, FObjectAsDuck);
 end;
 
 procedure TDuckTypedObject.Validate;

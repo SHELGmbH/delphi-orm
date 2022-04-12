@@ -106,12 +106,16 @@ type
       const AClassName: string): string;
     function GetStrategy: IdormPersistStrategy;
     procedure InsertHasManyRelation(AMappingTable: TMappingTable;
+      AIdValue: TValue; ARttiType: TRttiType; AObject: TObject; AUpsert: Boolean = False);
+    procedure UpsertHasManyRelation(AMappingTable: TMappingTable;
       AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
     procedure PersistHasManyRelation(AMappingTable: TMappingTable;
       AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
     procedure PersistHasOneRelation(AMappingTable: TMappingTable;
       AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
     procedure InsertHasOneRelation(AMappingTable: TMappingTable;
+      AIdValue: TValue; ARttiType: TRttiType; AObject: TObject; AUpsert: Boolean = False);
+    procedure UpsertHasOneRelation(AMappingTable: TMappingTable;
       AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
     procedure FixBelongsToRelation(AMappingTable: TMappingTable;
       AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
@@ -148,6 +152,8 @@ type
     ///
     procedure InternalUpdate(AObject: TObject; AValidaetable: TdormValidateable;
       AOnlyChild: boolean = false);
+    function InternalUpsert(AObject: TObject; AValidaetable: TdormValidateable;
+      AOnlyChild: boolean = false): TValue;
     function InternalInsert(AObject: TObject;
       AValidaetable: TdormValidateable): TValue;
     procedure InternalDelete(AObject: TObject;
@@ -191,6 +197,7 @@ type
     procedure HandleDirtyPersist(AIdValue: TValue; AObject: TObject;
       AValidateable: TdormValidateable);
     function Insert(AObject: TObject): TValue; overload;
+    function Upsert(AObject: TObject): TValue; overload;
     function Save(AObject: TObject): TValue; overload;
       deprecated 'Use Insert instead';
     function InsertAndFree(AObject: TObject): TValue;
@@ -202,6 +209,7 @@ type
     function PersistCollection(ACollection: TObject): TObject; overload;
     function PersistCollection(ACollection: IWrappedList): IWrappedList; overload;
     procedure InsertCollection(ACollection: TObject);
+    procedure UpsertCollection(ACollection: TObject);
     procedure UpdateCollection(ACollection: TObject);
     procedure DeleteCollection(ACollection: TObject);
     function GetObjectStatus(AObject: TObject): TdormObjectStatus;
@@ -1362,7 +1370,11 @@ begin
     if IsNullKey(_table, _idValue, False) then begin
       Insert(AObject);
     end else begin
-      Update(AObject);
+      if FPersistStrategy.CanUpsert {and _table.Id.IsFK} then begin
+        Upsert(AObject);
+      end else begin
+        Update(AObject);
+      end;
     end;
   end;
   DoSessionOnAfterPersistObject(AObject);
@@ -1799,7 +1811,7 @@ begin
 end;
 
 procedure TSession.InsertHasManyRelation(AMappingTable: TMappingTable;
-  AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
+      AIdValue: TValue; ARttiType: TRttiType; AObject: TObject; AUpsert: Boolean = False);
 var
   _has_many: TMappingRelation;
   _child_type: TRttiType;
@@ -1830,7 +1842,11 @@ begin
         GetLogger.Debug('-- Saving ' + _child_type.QualifiedName);
         GetLogger.Debug('----> Setting property ' + _has_many.ChildFieldName);
         TdormUtils.SetField(Obj, _has_many.ChildFieldName, AIdValue);
-        Insert(Obj);
+        if AUpsert then begin
+          Upsert(Obj);
+        end else begin
+          Insert(Obj);
+        end;
       end;
     end;
   end;
@@ -1838,7 +1854,7 @@ begin
 end;
 
 procedure TSession.InsertHasOneRelation(AMappingTable: TMappingTable;
-  AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
+      AIdValue: TValue; ARttiType: TRttiType; AObject: TObject; AUpsert: Boolean = False);
 var
   _has_one: TMappingRelation;
   _child_type: TRttiType;
@@ -2036,6 +2052,43 @@ begin
     end;
   finally
     GetLogger.ExitLevel('UPDATE ' + AObject.ClassName);
+  end;
+end;
+
+function TSession.InternalUpsert(AObject: TObject;
+  AValidaetable: TdormValidateable; AOnlyChild: boolean): TValue;
+var _Type: TRttiType;
+    _table: TMappingTable;
+    _idValue: TValue;
+begin
+  GetLogger.EnterLevel('UPSERT ' + AObject.ClassName);
+  try
+    try
+      _Type := FCTX.GetType(AObject.ClassInfo);
+      _table := FMappingStrategy.GetMapping(_Type);
+      _idValue := GetIdValue(_table.Id, AObject);
+
+      AValidaetable.Validate;
+      AValidaetable.UpsertValidate;
+      AValidaetable.OnBeforeUpsert;
+
+      FLogger.Info('Upserting ' + AObject.ClassName);
+      FixBelongsToRelation(_table, _idValue, _Type, AObject);
+      Result := GetStrategy.Upsert(_Type, AObject, _table);
+      _idValue := GetIdValue(_table.Id, AObject);
+      UpsertHasManyRelation(_table, _idValue, _Type, AObject);
+      UpsertHasOneRelation(_table, _idValue, _Type, AObject);
+      SetObjectStatus(AObject, osClean, False);
+      AValidaetable.OnAfterUpdate;
+      ObjectSaved(os_Upsert, AObject, _table, _Type);
+    except
+      on E: Exception do begin
+        GetLogger.Error(E.ClassName + sLineBreak + E.Message);
+        raise;
+      end;
+    end;
+  finally
+    GetLogger.ExitLevel('UPSERT ' + AObject.ClassName);
   end;
 end;
 
@@ -2238,6 +2291,45 @@ begin
   Coll := WrapAsList(ACollection);
   for Obj in Coll do
     Update(Obj);
+end;
+
+function TSession.Upsert(AObject: TObject): TValue;
+var
+  _v: TdormValidateable;
+begin
+  if IsObjectStatusAvailable(AObject) then
+    raise EdormException.Create
+      ('Upsert cannot be called if [ObjStatus] is enabled');
+  _v := WrapAsValidateableObject(AObject);
+  try
+    Result := InternalUpsert(AObject, _v);
+  finally
+    _v.Free;
+  end;
+end;
+
+procedure TSession.UpsertCollection(ACollection: TObject);
+var
+  Obj: TObject;
+  Coll: IWrappedList;
+begin
+  Coll := WrapAsList(ACollection);
+  for Obj in Coll do
+  begin
+    Upsert(Obj);
+  end;
+end;
+
+procedure TSession.UpsertHasManyRelation(AMappingTable: TMappingTable;
+  AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
+begin
+  InsertHasManyRelation(AMappingTable, AIdValue, ARttiType, AObject, True);
+end;
+
+procedure TSession.UpsertHasOneRelation(AMappingTable: TMappingTable;
+  AIdValue: TValue; ARttiType: TRttiType; AObject: TObject);
+begin
+  InsertHasOneRelation(AMappingTable, AIdValue, ARttiType, AObject, True);
 end;
 
 procedure TSession.DeleteCollection(ACollection: TObject);

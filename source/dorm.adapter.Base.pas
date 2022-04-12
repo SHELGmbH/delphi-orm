@@ -5,7 +5,7 @@ interface
 uses
   dorm.Commons,
   dorm.Filters,
-  dorm.Mappings;
+  dorm.Mappings, System.Rtti;
 
 type
   TBaseAdapter = class abstract(TdormInterfacedObject)
@@ -31,13 +31,14 @@ type
     class function ISOStrToDateTime(DateTimeAsString: string): TDateTime;
     class function ISOStrToDate(DateAsString: string): TDate;
     class function ISOStrToTime(TimeAsString: string): TTime;
-
   public
     function GetSelectSQL(Criteria: ICriteria; AMappingTable: TMappingTable)
       : string; overload; virtual;
     function GetSelectSQL(Criteria: ICustomCriteria): string; overload;
     function GetCountSQL(ACriteria: ICriteria;
       AMappingTable: TMappingTable): string;
+    function Upsert(ARttiType: TRttiType; AObject: TObject; AMappingTable: TMappingTable): TValue; virtual;
+    function CanUpsert: Boolean; virtual;
   end;
 
 implementation
@@ -54,6 +55,12 @@ var
 begin
   fs.TimeSeparator := ':';
   Result := FormatDateTime('hh:nn:ss', ATime, fs);
+end;
+
+function TBaseAdapter.Upsert(ARttiType: TRttiType; AObject: TObject;
+  AMappingTable: TMappingTable): TValue;
+begin
+  Result := 0;
 end;
 
 class function TBaseAdapter.ISODateToString(ADate: TDateTime): string;
@@ -257,6 +264,11 @@ begin
   end;
 
   Result := SQL;
+end;
+
+function TBaseAdapter.CanUpsert: Boolean;
+begin
+  Result := False;
 end;
 
 function TBaseAdapter.EscapeDate(const Value: TDate): string;
