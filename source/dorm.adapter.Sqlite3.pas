@@ -112,7 +112,7 @@ type
 implementation
 
 uses
-  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts;
+  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts, System.Types;
 
 function TSqlite3PersistStrategy.Update(ARttiType: TRttiType; AObject: TObject;
   AMappingTable: TMappingTable; ACurrentVersion: Int64): Int64;
@@ -413,6 +413,9 @@ var
   field: TMappingField;
   sql_fields_names, sql_fields_values, SQL: ansistring;
   pk_idx: Integer;
+  pk_idxs: TIntegerDynArray;
+  pk_names: string;
+  I: Integer;
   v, pk_value: TValue;
   PreStr: string;
   OldLastInsertedRowID: Integer;
@@ -431,8 +434,13 @@ begin
   SQL := ansistring(Format('INSERT INTO %s (%S) VALUES (%S) ', [AMappingTable.TableName,
     sql_fields_names, sql_fields_values]));
   pk_idx := GetPKMappingIndex(AMappingTable.Fields);
+  pk_idxs := GetPKMappingIndexes(AMappingTable.Fields);
+  pk_names := '';
+  for I := 0 to Length(pk_idxs) - 1 do begin
+    pk_names := pk_names + IfThen(pk_names <> '', ',') + AMappingTable.Fields[pk_idxs[I]].FieldName;
+  end;
   if AUpsert then begin
-    SQL := SQL + ansistring(Format('ON CONFLICT(%s) DO UPDATE SET ', [AMappingTable.Fields[pk_idx].FieldName]));
+    SQL := SQL + ansistring(Format('ON CONFLICT(%s) DO UPDATE SET ', [pk_names]));
     PreStr := '';
     for field in AMappingTable.Fields do begin
       if not field.IsPK then begin
