@@ -1744,9 +1744,11 @@ begin
       v := TdormUtils.GetProperty(Obj, _table.JoinTableList[i].PropName);
       if v.IsObject then begin
         SubObj := v.AsObject;
-        _validateable := WrapAsValidateableObject(SubObj, FValidatingDuck);
-        _validateable.OnAfterLoad;
-        ApplyBackupObject(SubObj);
+        if assigned(SubObj) then begin
+          _validateable := WrapAsValidateableObject(SubObj, FValidatingDuck);
+          _validateable.OnAfterLoad;
+          ApplyBackupObject(SubObj);
+        end;
       end;
     end;
   end;
