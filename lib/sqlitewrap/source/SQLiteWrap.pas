@@ -15,7 +15,7 @@
   Ported to D2009 Unicode by Roger Lascelles (support@veecad.com)
 
   V1.0.0
-  by Lukáš Gebauer at http://www.ararat.cz/doku.php/en:sqlitewrap.
+  by Lukas Gebauer at http://www.ararat.cz/doku.php/en:sqlitewrap.
   based on work by Tim Anderson (tim@itwriting.com)
 
   UNICODE HANDLING:
@@ -270,7 +270,7 @@ resourcestring
   c_unknown = 'Unknown error';
   c_failopen = 'Failed to open database "%s" : %s';
   c_error = '.' + slinebreak + 'Error [%d]: %s.' + slinebreak + '"%s": %s';
-  c_nomessage = 'No message';
+  c_nomessage = 'Unknown error description';
   c_errorsql = 'Error executing SQL';
   c_errorprepare = 'Could not prepare SQL statement';
   c_errorexec = 'Error executing SQL statement';
@@ -349,16 +349,17 @@ end;
 procedure TSQLiteDatabase.RaiseError(const s, SQL: String);
 var
   Msg: PAnsiChar;
+  m: Ansistring;
   ret: integer;
 begin
   Msg := nil;
   ret := sqlite3_errcode(self.fDB);
   if ret <> SQLITE_OK then
     Msg := Sqlite3_ErrMsg(self.fDB);
+  m := c_nomessage;
   if Msg <> nil then
-    raise ESQLiteException.CreateFmt(s + c_error, [ret, SQLiteErrorStr(ret), SQL, Msg])
-  else
-    raise ESQLiteException.CreateFmt(s, [SQL, c_nomessage]);
+    m := Msg;
+  raise ESqliteException.CreateFmt(s + c_error, [ret, SQLiteErrorStr(ret),SQL, m]);
 end;
 
 procedure TSQLiteDatabase.ExecSQL(const SQL: String);
@@ -380,7 +381,7 @@ begin
     SetParams(Stmt);
 
     iStepResult := Sqlite3_step(Stmt);
-    if (iStepResult <> SQLITE_DONE) then
+    if not iStepResult in [SQLITE_DONE,SQLITE_ROW] then
     begin
       SQLite3_reset(Stmt);
       RaiseError(c_errorexec, SQL);
@@ -908,11 +909,9 @@ begin
 end;
 
 initialization
-
 SQLite3_Initialize;
 
 finalization
-
 SQLite3_Shutdown;
 
 end.
