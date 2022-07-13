@@ -298,7 +298,11 @@ end;
 
 function TSqlite3PersistStrategy.EscapeDateTime(const Value: TDate; AWithMillisSeconds : boolean = false): String;
 begin
-  Result := FormatDateTime('YYYY-MM-DD HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
+  if FStandardDateFormat = '' then begin
+    Result := FormatDateTime('YYYY-MM-DD HH:NN:SS' + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
+  end else begin
+    Result := FormatDateTime(FStandardDateFormat + IfThen(AWithMillisSeconds, '.ZZZ'), Value);
+  end;
 end;
 
 function TSqlite3PersistStrategy.EscapeString(const Value: String): String;
