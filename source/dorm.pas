@@ -270,7 +270,7 @@ type
 
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
       overload;
-    function LoadListSQL<T: class>(const _WhereClause : string; _WithNoLock : boolean = false):
+    function LoadListSQL<T: class>(const _WhereClause : string; _WithNoLock : boolean = false; _MaxRows: Integer = 0):
 
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
       overload;
@@ -326,7 +326,7 @@ implementation
 
 uses
   dorm.Adapters,
-  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts;
+  dorm.Utils, System.StrUtils, FireDAC.Stan.Consts, System.Math;
 { TSession }
 
 procedure TSession.ApplyBackupObject(_Obj: TObject);
@@ -1184,7 +1184,7 @@ begin
     raise Exception.Create('Unknown property name ' + APropertyName);
 end;
 
-function TSession.LoadListSQL<T>(const _WhereClause : string; _WithNoLock : boolean = false):
+function TSession.LoadListSQL<T>(const _WhereClause : string; _WithNoLock : boolean = false; _MaxRows: Integer = 0):
 {$IF CompilerVersion > 22}TObjectList<T>{$ELSE}TdormObjectList<T>{$IFEND};
 var
   Table: TMappingTable;
@@ -1195,8 +1195,13 @@ begin
   ItemTypeInfo := T.ClassInfo;
   rt := FCTX.GetType(ItemTypeInfo);
   Table := FMappingStrategy.GetMapping(rt);
-  CustomCrit := TSQLCustomCriteria.Create('select * from ' + Table.TableName +
-    IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause); //TODO: Nolock nur fuer MSSQL!
+  if FPersistStrategy.GetEngine <> S_FD_MSSQL_RDBMS then begin
+    CustomCrit := TSQLCustomCriteria.Create('select * from ' + Table.TableName +
+      ' where ' + _WhereClause + IfThen(_MaxRows > 0, ' limit ' + _MaxRows.ToString));
+  end else begin
+    CustomCrit := TSQLCustomCriteria.Create('select ' + IfThen(_MaxRows > 0, 'top ' + _MaxRows.ToString) + ' * from ' + Table.TableName +
+      IfThen(_WithNoLock, ' with(nolock)','') + ' where ' + _WhereClause);
+  end;
   Result := LoadList<T>(CustomCrit);
 end;
 
