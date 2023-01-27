@@ -465,7 +465,7 @@ begin
           begin
             targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
           end;
-        end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
+        end else if Field.FieldType.Name.StartsWith('TObjectList<') or (assigned(Field.FieldType.BaseType) and Field.FieldType.BaseType.Name.StartsWith('TObjectList<')) then begin
           if assigned(Src) then begin
             sourceCollection := TObjectList<TObject>(Src);
             if Field.GetValue(cloned).IsEmpty then begin
@@ -599,7 +599,7 @@ begin
           begin
             targetCollection.Add(TdormUtils.Clone(sourceCollection[I]));
           end;
-        end else if Field.FieldType.BaseType.Name.StartsWith('TObjectList<') then begin
+        end else if Field.FieldType.Name.StartsWith('TObjectList<') or (assigned(Field.FieldType.BaseType) and Field.FieldType.BaseType.Name.StartsWith('TObjectList<')) then begin
           if assigned(Src) then begin
             sourceCollection := TObjectList<TObject>(Src);
             if Field.GetValue(cloned).IsEmpty then begin
