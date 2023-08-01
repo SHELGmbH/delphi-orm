@@ -343,7 +343,9 @@ begin
 
       vtString:
         begin
+          {$WARN IMPLICIT_STRING_CAST OFF}
           mArguments.Add(TdormParameter.Create(TypeString, v.VString^));
+          {$WARN IMPLICIT_STRING_CAST ON}
         end;
 
       vtWideString:
@@ -358,13 +360,17 @@ begin
 
       vtChar:
         begin
+          {$WARN IMPLICIT_STRING_CAST OFF}
           mArguments.Add(TdormParameter.Create(TypeString, v.VChar));
+          {$WARN IMPLICIT_STRING_CAST ON}
         end;
 
       vtAnsiString:
         begin
+          {$WARN IMPLICIT_STRING_CAST OFF}
           mArguments.Add(TdormParameter.Create(TypeString,
             AnsiString(v.VAnsiString^)));
+          {$WARN IMPLICIT_STRING_CAST ON}
         end;
 
       vtUnicodeString:

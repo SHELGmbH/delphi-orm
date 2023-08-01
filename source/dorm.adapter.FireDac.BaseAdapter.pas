@@ -1072,7 +1072,9 @@ begin
           sourceStream.Position := 0;
           str.CopyFrom(sourceStream, 0);
           str.Position := 0;
+          {$WARN IMPLICIT_STRING_CAST_LOSS OFF}
           Param.AsBlob := str.DataString;
+          {$WARN IMPLICIT_STRING_CAST_LOSS ON}
           GetLogger.Debug(Param.Name + ' = <blob ' + IntToStr(str.Size) + ' bytes>');
         finally
           str.Free;

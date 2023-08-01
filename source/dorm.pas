@@ -161,7 +161,7 @@ type
     procedure CheckChangedRows(const HowManyChangedRows: Integer);
     procedure ObjectSaved(ASaveMode : TDormSaveMode; AObject : TObject; _table: TMappingTable; _Type: TRttiType); virtual;
   public
-    constructor Create(Environment: TdormEnvironment); overload; virtual;
+    constructor Create(Environment: TdormEnvironment); reintroduce; overload; virtual;
     destructor Destroy; override;
     // Environments
     function GetEnv: string;

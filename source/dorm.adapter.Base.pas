@@ -242,7 +242,9 @@ begin
     else if fm.FieldType = 'boolean' then
       SQL := SQL + GetBooleanValueAsString(ACriteriaItem.GetValue.AsBoolean)
     else if fm.FieldType = 'float' then begin
+      {$WARN SYMBOL_PLATFORM OFF}
       fmtsettings := TFormatSettings.Create(SysLocale.DefaultLCID);
+      {$WARN SYMBOL_PLATFORM ON}
       fmtsettings.DecimalSeparator := '.';
       SQL := SQL + FloatToStr(ACriteriaItem.GetValue.AsExtended, fmtsettings);
     end else if fm.FieldType = 'date' then
