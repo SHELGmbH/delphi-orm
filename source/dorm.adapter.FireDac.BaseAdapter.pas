@@ -36,6 +36,7 @@ type
       AMappingRelationField: TMappingField = nil): TFDQuery;
     function GetSqlFieldsForUpdate(AMappingTable: TMappingTable; AObject: TObject; _ParamFields : TStringList): string;
     procedure SetNullParameterValue(AParam: TFDParam);
+    procedure ExtractFunctionParameters(const _FunctionStr: String; _ParamField: TStringList);
   protected
     FFormatSettings: TFormatSettings;
     FD: TFireDACFacade;
@@ -352,6 +353,22 @@ begin
   end;
 end;
 
+procedure TFireDACBaseAdapter.ExtractFunctionParameters(const _FunctionStr: String; _ParamField: TStringList);
+var
+  ParamStr, Param: String;
+  ParamArray: TArray<String>;
+begin
+  ParamStr := copy(_FunctionStr, Pos('(', _FunctionStr) + 1, 
+                                 Pos(')', _FunctionStr) - Pos('(', _FunctionStr) - 1);
+  ParamArray := ParamStr.Split([',']);
+  for var I := 0 to Length(ParamArray)-1 do begin
+    if Trim(ParamArray[I]).StartsWith(':') then begin
+      Param := copy(Trim(ParamArray[I]), 2, Trim(ParamArray[I]).Length-1); // Remove ':'-Prefix
+      _ParamField.Add(Param);
+    end;
+  end;
+end;
+
 function TFireDACBaseAdapter.GetConnection: TCustomConnection;
 begin
   Result := FD.GetConnection;
@@ -400,6 +417,7 @@ var
   ts : TDateTime;
 begin
   ParamFields := TStringList.Create;
+  ParamFields.Sorted := True;
   try
     sql_fields_names := '';
     sql_fields_values := '';
@@ -419,6 +437,7 @@ begin
         if Assigned(FuncVal) then begin
           if FuncVal.TriggerVal.IsEmpty or TdormUtils.EqualValues(FuncVal.TriggerVal, v) then begin
             sql_fields_values := sql_fields_values + ',dbo.' + FuncVal.FuncName;
+            ExtractFunctionParameters(FuncVal.FuncName, ParamFields);
             continue;
           end;
         end;
@@ -540,6 +559,7 @@ begin
       if Assigned(FuncVal) then begin
         if FuncVal.TriggerVal.IsEmpty or TdormUtils.EqualValues(FuncVal.TriggerVal, v) then begin
           Result := Result + ',[' + field.FieldName + '] = dbo.' + FuncVal.FuncName;
+          ExtractFunctionParameters(FuncVal.FuncName, _ParamFields);
           continue;
         end;
       end;
